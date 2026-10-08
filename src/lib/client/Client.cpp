@@ -14,6 +14,7 @@
 #include "client/ServerProxy.h"
 #include "client/ServerProxy1_7.h"
 #include "client/ServerProxy1_8.h"
+#include "client/ServerProxy1_9.h"
 #include "common/NetworkProtocol.h"
 #include "common/Settings.h"
 #include "deskflow/Clipboard.h"
@@ -482,6 +483,9 @@ bool Client::setupComputer(int16_t protocolMinor)
     break;
   case 8:
     m_server = new ServerProxy1_8(this, m_stream, m_events);
+    break;
+  case 9:
+    m_server = new ServerProxy1_9(this, m_stream, m_events);
     break;
   default:
     break;

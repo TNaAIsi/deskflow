@@ -45,7 +45,7 @@ static const int16_t kProtocolMajorVersion = 1;
  * @note When incrementing the minor version, the Deskflow application version should also increment
  * @since Protocol version 1.0
  */
-static const int16_t kProtocolMinorVersion = 8;
+static const int16_t kProtocolMinorVersion = 9;
 
 /**
  * @brief Default TCP port for Deskflow connections
@@ -1161,6 +1161,59 @@ extern const char *const kMsgDSecureInputNotification;
  * @since Protocol version 1.8
  */
 extern const char *const kMsgDLanguageSynchronisation;
+
+/**
+ * @brief Audio stream configuration
+ *
+ * **Message Code**: `"ACFG"`
+ * **Direction**: Primary → Secondary
+ * **Format**: `"ACFG%1i%2i%2i%2i%s"`
+ * **Parameters**:
+ * - `$1`: Enable flag (1 byte): 1 = start audio, 0 = stop audio
+ * - `$2`: Sample rate (2 bytes, unsigned), e.g. 48000
+ * - `$3`: Channel count (2 bytes, unsigned), e.g. 2 for stereo
+ * - `$4`: Bit depth (2 bytes, unsigned): 16 for PCM 16-bit, 0 for Opus
+ * - `$5`: Codec name (string), e.g. "pcm_s16le" or "opus"
+ *
+ * Sent by the primary to start or stop a continuous audio stream to the secondary.
+ *
+ * @since Protocol version 1.9
+ */
+extern const char *const kMsgDAudioConfig;
+
+/**
+ * @brief Audio data frame
+ *
+ * **Message Code**: `"ADAT"`
+ * **Direction**: Primary → Secondary
+ * **Format**: `"ADAT%4i%s"`
+ * **Parameters**:
+ * - `$1`: Sequence number (4 bytes, unsigned) — monotonically increasing
+ * - `$2`: Audio payload (string) — one frame of encoded or raw PCM audio
+ *
+ * A single frame of audio data. The frame duration is fixed at 20 ms
+ * (960 samples per channel at 48 kHz). Sequence numbers allow the receiver
+ * to detect dropped frames.
+ *
+ * @since Protocol version 1.9
+ */
+extern const char *const kMsgDAudioData;
+
+/**
+ * @brief Audio ready-to-send / flow control
+ *
+ * **Message Code**: `"ARTS"`
+ * **Direction**: Secondary → Primary
+ * **Format**: `"ARTS%1i"`
+ * **Parameters**:
+ * - `$1`: Ready flag (1 byte): 1 = ready to receive, 0 = pause
+ *
+ * The secondary sends this to control the flow of audio data. When paused,
+ * the primary should stop sending audio data but keep the stream configured.
+ *
+ * @since Protocol version 1.9
+ */
+extern const char *const kMsgDAudioRTS;
 
 /** @} */ // end of protocol_system group
 
