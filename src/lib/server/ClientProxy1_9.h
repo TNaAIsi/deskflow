@@ -22,7 +22,10 @@ public:
 
   void startAudio();
   void stopAudio();
-  [[nodiscard]] bool isAudioActive() const { return m_audioActive; }
+  [[nodiscard]] bool isAudioActive() const
+  {
+    return m_audioActive;
+  }
 
 private:
   void handleAudioTimer();

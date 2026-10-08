@@ -52,7 +52,9 @@ void ServerProxy1_9::handleAudioConfig()
 
   ProtocolUtil::readf(getStream(), kMsgDAudioConfig + 4, &enable, &sampleRate, &channels, &bitDepth, &codec);
 
-  LOG_INFO("audio config: enable=%u rate=%u ch=%u bits=%u codec=%s", enable, sampleRate, channels, bitDepth, codec.c_str());
+  LOG_INFO(
+      "audio config: enable=%u rate=%u ch=%u bits=%u codec=%s", enable, sampleRate, channels, bitDepth, codec.c_str()
+  );
 
   if (enable) {
     startPlayback(static_cast<int>(sampleRate), static_cast<int>(channels), static_cast<int>(bitDepth));

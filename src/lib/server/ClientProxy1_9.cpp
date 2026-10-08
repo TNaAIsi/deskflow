@@ -52,9 +52,7 @@ void ClientProxy1_9::startAudio()
 
   // Send ACFG start message: 48kHz, stereo, 16-bit PCM
   const std::string codec = "pcm_s16le";
-  ProtocolUtil::writef(
-      getStream(), kMsgDAudioConfig, 1, kSampleRate, kChannels, 16, &codec
-  );
+  ProtocolUtil::writef(getStream(), kMsgDAudioConfig, 1, kSampleRate, kChannels, 16, &codec);
 
   // Create a repeating timer (every 20ms) using the timer itself as event target
   // to avoid colliding with the heartbeat handler registered on `this`.
@@ -83,9 +81,7 @@ void ClientProxy1_9::stopAudio()
 
   // Notify client to stop playback
   const std::string codec = "pcm_s16le";
-  ProtocolUtil::writef(
-      getStream(), kMsgDAudioConfig, 0, kSampleRate, kChannels, 16, &codec
-  );
+  ProtocolUtil::writef(getStream(), kMsgDAudioConfig, 0, kSampleRate, kChannels, 16, &codec);
 }
 
 void ClientProxy1_9::handleAudioTimer()
