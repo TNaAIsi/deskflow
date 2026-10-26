@@ -49,6 +49,7 @@ Q_SIGNALS:
   void peerConnected(const QString &peer);
   void peerDisconnected(const QString &peer);
   void channelConnected(const QString &peer, Channel channel);
+  void channelDisconnected(const QString &peer, Channel channel);
   void
   messageReceived(const QString &peer, const QString &type, const QJsonObject &metadata, const QByteArray &payload);
   void error(const QString &message);

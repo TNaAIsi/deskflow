@@ -34,6 +34,10 @@ Q_SIGNALS:
   void clearSettingsRequested();
 
 protected:
+  // Windows cores may run as SYSTEM in the desktop session. Workspace commands
+  // must come from that session's interactive user, or the core's own user.
+  bool authorizedWorkspaceClient(QLocalSocket *clientSocket) const;
+
   /**!
    * Write a message to the client socket and append a newline character.
    *

@@ -9,7 +9,9 @@
 
 #pragma once
 
+#include <QJsonObject>
 #include <QMainWindow>
+#include <QPointer>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSystemTrayIcon>
@@ -39,6 +41,10 @@ class MainWindow;
 
 namespace deskflow::gui::ipc {
 class DaemonIpcClient;
+class CoreIpcClient;
+} // namespace deskflow::gui::ipc
+namespace deskflow::workspace {
+class WorkspaceService;
 }
 
 class MainWindow : public QMainWindow
@@ -90,6 +96,8 @@ private:
   void coreProcessError(CoreProcess::Error error);
   void coreConnectionStateChanged(ConnectionState state);
   void coreProcessStateChanged(ProcessState state);
+  void syncWorkspace();
+  void syncWorkspaceTopology();
 
   void trayIconActivated(QSystemTrayIcon::ActivationReason reason);
   void serverConnectionConfigureClient(const QString &clientName);
@@ -181,6 +189,10 @@ private:
   QSystemTrayIcon *m_trayIcon = nullptr;
   QLocalServer *m_guiDupeChecker = nullptr;
   deskflow::gui::ipc::DaemonIpcClient *m_daemonIpcClient = nullptr;
+  deskflow::gui::ipc::CoreIpcClient *m_workspaceCoreIpc = nullptr;
+  QPointer<deskflow::workspace::WorkspaceService> m_workspaceService;
+  QJsonObject m_lastWorkspaceRuntime;
+  bool m_workspaceServer = false;
 
   LogDock *m_logDock;
   StatusBar *m_statusBar = nullptr;

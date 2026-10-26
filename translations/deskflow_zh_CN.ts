@@ -1420,8 +1420,32 @@ Enabling this setting will disable the server config GUI.</source>
 <context>
     <name>WorkspaceDialog</name>
     <message>
+        <source>Complete</source>
+        <translation>已完成</translation>
+    </message>
+    <message>
+        <source>Transferring</source>
+        <translation>正在传输</translation>
+    </message>
+    <message>
+        <source>Requesting</source>
+        <translation>正在请求</translation>
+    </message>
+    <message>
+        <source>Available</source>
+        <translation>可接收</translation>
+    </message>
+    <message>
+        <source>Cancelled</source>
+        <translation>已取消</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation type="unfinished">错误</translation>
+    </message>
+    <message>
         <source>Enable shared workspace</source>
-        <translation type="unfinished"></translation>
+        <translation>启用共享工作台</translation>
     </message>
     <message>
         <source>Share copied files and folders</source>
@@ -1504,6 +1528,10 @@ Enabling this setting will disable the server config GUI.</source>
         <translation>打开接收位置</translation>
     </message>
     <message>
+        <source>Clear completed clipboard cache</source>
+        <translation>清理已完成文件缓存</translation>
+    </message>
+    <message>
         <source>Files</source>
         <translation>文件</translation>
     </message>
@@ -1557,15 +1585,15 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Start Deskflow sharing first, then reopen this window. Preferences can still be saved.</source>
-        <translation>请先启动 Deskflow 共享；窗口将自动重连。当前仍可保存偏好设置。</translation>
+        <translation type="vanished">请先启动 Deskflow 共享；窗口将自动重连。当前仍可保存偏好设置。</translation>
     </message>
     <message>
         <source>Sharing stopped. Reopen this window after restarting Deskflow.</source>
-        <translation>共享已停止，重新启动后窗口将自动重连。</translation>
+        <translation type="vanished">共享已停止，重新启动后窗口将自动重连。</translation>
     </message>
     <message>
         <source>Connecting to the local sharing process…</source>
-        <translation>正在连接本机共享进程…</translation>
+        <translation type="vanished">正在连接本机共享进程…</translation>
     </message>
     <message>
         <source>%1 (offline)</source>
@@ -1598,6 +1626,10 @@ Enabling this setting will disable the server config GUI.</source>
     <message>
         <source>Send</source>
         <translation>发送</translation>
+    </message>
+    <message>
+        <source>Start sharing to connect the shared workspace.</source>
+        <translation>请启动共享，以连接共享工作台。</translation>
     </message>
     <message>
         <source>Start sharing before sending files.</source>
@@ -1719,6 +1751,21 @@ Enabling this setting will disable the server config GUI.</source>
     <message>
         <source>Move the monitors so their interiors do not overlap. Touching edges are allowed.</source>
         <translation>请移动显示器，使内部区域不重叠。边缘可以相接。</translation>
+    </message>
+</context>
+<context>
+    <name>deskflow::workspace::FileTransferService</name>
+    <message>
+        <source>Wait for file transfers to finish before clearing the clipboard cache.</source>
+        <translation>请等待文件传输完成后再清理剪贴板缓存。</translation>
+    </message>
+    <message>
+        <source>The clipboard is busy; retry clearing the cache.</source>
+        <translation>剪贴板正忙，请稍后重试清理缓存。</translation>
+    </message>
+    <message>
+        <source>Could not remove a completed clipboard cache folder: %1</source>
+        <translation>无法删除已完成的文件缓存目录：%1</translation>
     </message>
 </context>
 <context>

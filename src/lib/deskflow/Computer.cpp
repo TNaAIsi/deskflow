@@ -209,6 +209,11 @@ void Computer::warpCursor(int32_t x, int32_t y)
 
 void Computer::setClipboard(ClipboardID id, const IClipboard *clipboard)
 {
+  if (deskflow::workspace::g_fileClipboardEnabled.load(std::memory_order_acquire)) {
+    const auto files = deskflow::workspace::nativeClipboardFiles();
+    if (files.available)
+      deskflow::workspace::g_fileClipboardActive.store(!files.paths.isEmpty(), std::memory_order_release);
+  }
   if (deskflow::workspace::g_fileClipboardActive.load(std::memory_order_acquire)) {
     bool hasContents = false;
     if (clipboard && clipboard->open(clipboard->getTime())) {
@@ -224,6 +229,11 @@ void Computer::setClipboard(ClipboardID id, const IClipboard *clipboard)
 
 void Computer::grabClipboard(ClipboardID id)
 {
+  if (deskflow::workspace::g_fileClipboardEnabled.load(std::memory_order_acquire)) {
+    const auto files = deskflow::workspace::nativeClipboardFiles();
+    if (files.available)
+      deskflow::workspace::g_fileClipboardActive.store(!files.paths.isEmpty(), std::memory_order_release);
+  }
   if (deskflow::workspace::preserveFileClipboard(false))
     return;
   m_computer->setClipboard(id, nullptr);

@@ -13,10 +13,12 @@
 #include "base/Log.h"
 #include "common/Constants.h"
 #include "common/ExitCodes.h"
+#include "common/I18N.h"
 #include "deskflow/ClientApp.h"
 #include "deskflow/ServerApp.h"
 #include "deskflow/ipc/CoreIpcServer.h"
-#include "workspace/WorkspaceService.h"
+#include "workspace/DisplayTopology.h"
+#include "workspace/FileClipboardState.h"
 
 #if defined(Q_OS_WIN)
 #include "arch/win32/ArchMiscWindows.h"
@@ -118,6 +120,7 @@ int main(int argc, char **argv)
   }
 
   parser.parse();
+  I18N::instance();
 
   EventQueue events;
   const auto processName = QFileInfo(argv[0]).fileName();
@@ -130,26 +133,33 @@ int main(int argc, char **argv)
   );
   ipcServer->listen();
 
-  deskflow::workspace::WorkspaceService workspace(parser.serverMode(), &app);
+  // Clipboard and audio run in the interactive GUI user, not the potentially
+  // SYSTEM-elevated keyboard core. The core receives only validated geometry.
+  auto &topology = deskflow::workspace::DisplayTopology::instance();
+  topology.initialize(Settings::value(Settings::Core::ComputerName).toString());
+  const auto storedLayout = QJsonDocument::fromJson(Settings::value(Settings::Workspace::Layout).toString().toUtf8());
+  if (storedLayout.isObject() && !storedLayout.object().isEmpty())
+    topology.setLayout(storedLayout.object());
+  const auto options =
+      QJsonDocument::fromJson(Settings::value(Settings::Workspace::Options).toString().toUtf8()).object();
+  deskflow::workspace::g_fileClipboardEnabled.store(
+      options.value("enabled").toBool(true) && options.value("fileClipboard").toBool(true)
+  );
   QObject::connect(
-      ipcServer, &deskflow::core::ipc::CoreIpcServer::workspaceCommandReceived, &workspace,
-      [&workspace](const QString &encoded) {
+      ipcServer, &deskflow::core::ipc::CoreIpcServer::workspaceCommandReceived, &app,
+      [&topology](const QString &encoded) {
         const auto bytes = QByteArray::fromBase64(encoded.toLatin1(), QByteArray::Base64UrlEncoding);
         const auto document = QJsonDocument::fromJson(bytes);
-        if (document.isObject())
-          workspace.command(document.object());
+        const auto command = document.object();
+        if (command.value("action").toString() != "runtimeTopology")
+          return;
+        topology.setLayout(command.value("topology").toObject(), true);
+        const bool enabled = command.value("fileClipboardEnabled").toBool();
+        deskflow::workspace::g_fileClipboardEnabled.store(enabled);
+        if (!enabled)
+          deskflow::workspace::g_fileClipboardActive.store(false);
       }
   );
-  QObject::connect(
-      &workspace, &deskflow::workspace::WorkspaceService::stateChanged, ipcServer,
-      [ipcServer](const QJsonObject &state) {
-        const auto encoded = QJsonDocument(state)
-                                 .toJson(QJsonDocument::Compact)
-                                 .toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals);
-        ipcServer->broadcastCommand("workspaceState", QString::fromLatin1(encoded));
-      }
-  );
-  QTimer::singleShot(0, &workspace, &deskflow::workspace::WorkspaceService::start);
 
   QThread coreThread;
   QObject::connect(&coreThread, &QThread::finished, &app, &QApplication::quit);

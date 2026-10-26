@@ -8,6 +8,49 @@ permissions:
   contents: read
 
 jobs:
+  macos-arm64:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Qt and OpenSSL
+        uses: ./.github/actions/install-dependencies
+        with:
+          qt-version: 6.8.3
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTS=ON -DSKIP_BUILD_TESTS=ON
+          "-DDESKFLOW_VERSION_OVERRIDE=1.28.0"
+          "-DPACKAGE_VERSION_LABEL=1.28.0-workspace"
+          -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
+      - name: Compile
+        run: cmake --build build --parallel 4
+      - name: Test without desktop input injection
+        run: ctest --test-dir build/src/unittests --output-on-failure -E "^(MSWindowsClipboardTests|OSXKeyStateTests|OSXClipboardTests)$"
+      - name: Package
+        run: cpack --config build/CPackConfig.cmake -B build -D CPACK_DMG_DS_STORE_SETUP_SCRIPT=
+      - name: Include installation guide
+        run: |
+          cp docs/WorkspaceGuide.zh-CN.md build/使用说明.md
+          python3 deploy/render-workspace-guide.py --output build/使用说明.html --images build/validation/ui --revision "$GITHUB_SHA"
+          shasum -a 256 build/deskflow-*.dmg > build/SHA256.txt
+      - name: Upload packages and validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deskflow-workspace-macos-arm64
+          path: |
+            build/deskflow-*.dmg
+            build/使用说明.md
+            build/使用说明.html
+            build/SHA256.txt
+            build/validation/ui/*.png
+            build/src/unittests/Testing/Temporary/LastTest.log
+          if-no-files-found: warn
+
   windows-x64:
     runs-on: windows-2022
     timeout-minutes: 60
@@ -31,11 +74,24 @@ jobs:
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           -DBUILD_TESTS=ON -DSKIP_BUILD_TESTS=ON
-          -DDESKFLOW_VERSION_OVERRIDE=1.28.0
-          -DPACKAGE_VERSION_LABEL=1.28.0-workspace
+          "-DDESKFLOW_VERSION_OVERRIDE=1.28.0"
+          "-DPACKAGE_VERSION_LABEL=1.28.0-workspace"
           ${{ steps.deps.outputs.vcpkg-cmake-config }}
       - name: Compile
         run: cmake --build build --parallel 4
+      - name: Prepare runtime library path
+        shell: pwsh
+        run: |
+          Add-Content $env:GITHUB_PATH "$env:GITHUB_WORKSPACE/build/bin"
+          $line = Get-Content build/CMakeCache.txt | Where-Object { $_ -match '^OPENSSL_INCLUDE_DIR:PATH=' } | Select-Object -First 1
+          if ($line) {
+            $include = ($line -split '=', 2)[1]
+            $bin = Join-Path (Split-Path $include -Parent) 'bin'
+            if (Test-Path $bin) {
+              Add-Content $env:GITHUB_PATH $bin
+              Get-ChildItem $bin -Filter '*.dll' | Copy-Item -Destination build/bin
+            }
+          }
       - name: Test without desktop input injection
         run: ctest --test-dir build/src/unittests --output-on-failure -E "^(MSWindowsClipboardTests|OSXKeyStateTests|OSXClipboardTests)$"
       - name: Build installers
@@ -44,6 +100,7 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item docs/WorkspaceGuide.zh-CN.md build/使用说明.md
+          python deploy/render-workspace-guide.py --output build/使用说明.html --images build/validation/ui --revision $env:GITHUB_SHA
           Get-ChildItem build/deskflow-*.msi,build/deskflow-*.zip | Get-FileHash -Algorithm SHA256 | Format-List | Out-File -Encoding utf8 build/SHA256.txt
       - name: Upload packages and validation
         if: always()
@@ -54,6 +111,7 @@ jobs:
             build/deskflow-*.msi
             build/deskflow-*.zip
             build/使用说明.md
+            build/使用说明.html
             build/SHA256.txt
             build/src/unittests/Testing/Temporary/LastTest.log
           if-no-files-found: warn

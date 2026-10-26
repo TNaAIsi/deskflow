@@ -30,6 +30,11 @@ CoreIpcServer &CoreIpcServer::instance()
 void CoreIpcServer::processCommand(QLocalSocket *clientSocket, const QString &command, const QStringList &parts)
 {
   if (command == QStringLiteral("workspace") && parts.size() == 2 && parts.at(1).size() <= 1024 * 1024) {
+    if (!authorizedWorkspaceClient(clientSocket)) {
+      LOG_WARN("core ipc server rejected workspace command from unauthorized local client");
+      writeToClientSocket(clientSocket, QStringLiteral("error=unauthorized workspace command"));
+      return;
+    }
     Q_EMIT workspaceCommandReceived(parts.at(1));
     return;
   }

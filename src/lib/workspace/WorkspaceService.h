@@ -19,6 +19,7 @@ class WorkspaceService : public QObject
   Q_OBJECT
 public:
   explicit WorkspaceService(bool server, QObject *parent = nullptr);
+  ~WorkspaceService() override;
   void start();
   QJsonObject state() const;
   void command(const QJsonObject &command);

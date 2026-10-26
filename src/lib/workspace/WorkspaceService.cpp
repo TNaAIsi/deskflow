@@ -6,6 +6,7 @@
 #include "AudioService.h"
 #include "DisplayTopology.h"
 #include "FileTransferService.h"
+#include "WorkspaceActivity.h"
 #include "common/Settings.h"
 
 #include <QDebug>
@@ -125,6 +126,16 @@ WorkspaceService::WorkspaceService(bool server, QObject *parent)
         m_transport.send(name, "layout", {{"layout", DisplayTopology::instance().layout()}});
     update();
   });
+  connect(
+      &m_transport, &WorkspaceTransport::channelDisconnected, this,
+      [this](const QString &peer, WorkspaceTransport::Channel channel) {
+        if (channel == WorkspaceTransport::Channel::Files)
+          m_files->peerDisconnected(peer);
+        if (channel == WorkspaceTransport::Channel::Audio)
+          m_audio->peerDisconnected(peer);
+        update();
+      }
+  );
   connect(&m_transport, &WorkspaceTransport::messageReceived, this, &WorkspaceService::message);
   connect(&DisplayTopology::instance(), &DisplayTopology::changed, this, &WorkspaceService::update);
   connect(
@@ -156,8 +167,23 @@ void WorkspaceService::start()
   applyOptions();
 }
 
+WorkspaceService::~WorkspaceService()
+{
+  setWorkspaceResponsive(false);
+  m_update.stop();
+  m_offerRetry.stop();
+  // Stop while all members and resource children are still alive. A transport
+  // member destructor must not emit callbacks into already-destroyed state.
+  m_transport.stop();
+  disconnect(&m_transport, nullptr, this, nullptr);
+  m_audio->stopCapture();
+  m_audio->stopPlayback();
+  m_files->setClipboardEnabled(false);
+}
+
 void WorkspaceService::applyOptions()
 {
+  setWorkspaceResponsive(m_options.value("enabled").toBool());
   m_files->setClipboardEnabled(m_options.value("enabled").toBool() && m_options.value("fileClipboard").toBool());
   const auto autoMiB = std::clamp(m_options.value("automaticFileMiB").toInteger(), qint64(0), qint64(1024 * 1024));
   m_files->setAutomaticClipboardLimit(autoMiB == 0 ? std::numeric_limits<qint64>::max() : autoMiB * 1024 * 1024);
@@ -291,6 +317,8 @@ void WorkspaceService::command(const QJsonObject &object)
     );
   } else if (action == "cancel") {
     m_files->cancel(object.value("id").toString());
+  } else if (action == "clearFileCache") {
+    m_files->clearClipboardCache();
   } else if (action == "layout") {
     const auto layout = object.value("layout").toObject();
     if (m_server)

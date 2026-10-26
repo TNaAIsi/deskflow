@@ -28,15 +28,19 @@
 #include "gui/Messages.h"
 #include "gui/TlsUtility.h"
 #include "gui/core/CoreProcess.h"
+#include "gui/ipc/CoreIpcClient.h"
 #include "gui/ipc/DaemonIpcClient.h"
 #include "gui/widgets/LogDock.h"
 #include "net/FingerprintDatabase.h"
 #include "widgets/StatusBar.h"
+#include "workspace/DisplayTopology.h"
+#include "workspace/WorkspaceService.h"
 
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QDesktopServices>
 #include <QFileDialog>
+#include <QJsonDocument>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QMenu>
@@ -49,6 +53,7 @@
 #include <QRegularExpressionValidator>
 #include <QScreen>
 #include <QScrollBar>
+#include <QTimer>
 
 #include <memory>
 
@@ -64,6 +69,7 @@ MainWindow::MainWindow()
       m_trayIcon{new QSystemTrayIcon(this)},
       m_guiDupeChecker{new QLocalServer(this)},
       m_daemonIpcClient{new ipc::DaemonIpcClient(this)},
+      m_workspaceCoreIpc{new ipc::CoreIpcClient(this)},
       m_logDock{new LogDock(this)},
       m_statusBar{new StatusBar(this)},
       m_menuFile{new QMenu(this)},
@@ -83,6 +89,21 @@ MainWindow::MainWindow()
       m_networkMonitor{new NetworkMonitor(this)}
 {
   ui->setupUi(this);
+  connect(m_workspaceCoreIpc, &ipc::CoreIpcClient::connected, this, [this] {
+    m_lastWorkspaceRuntime = {};
+    syncWorkspaceTopology();
+  });
+  auto *workspaceTimer = new QTimer(this);
+  workspaceTimer->setInterval(2000);
+  connect(workspaceTimer, &QTimer::timeout, this, [this] {
+    if (!m_coreProcess.isStarted())
+      return;
+    syncWorkspace();
+    if (!m_workspaceCoreIpc->isConnected() && !m_workspaceCoreIpc->isConnecting())
+      m_workspaceCoreIpc->connectToServer();
+    syncWorkspaceTopology();
+  });
+  workspaceTimer->start();
 
   setWindowIcon(QIcon::fromTheme(kRevFqdnName));
 
@@ -166,6 +187,10 @@ MainWindow::MainWindow()
 }
 MainWindow::~MainWindow()
 {
+  if (auto *dialog = findChild<WorkspaceDialog *>("workspaceDialog"))
+    dialog->setService(nullptr);
+  delete m_workspaceService.data();
+  m_workspaceService = nullptr;
   // Stop network monitoring
   if (m_networkMonitor) {
     m_networkMonitor->stopMonitoring();
@@ -674,7 +699,9 @@ void MainWindow::createMenuBar()
       dialog->raise();
       dialog->activateWindow();
     } else {
-      (new WorkspaceDialog(this))->show();
+      auto *created = new WorkspaceDialog(this);
+      created->setService(m_workspaceService);
+      created->show();
     }
   });
 
@@ -957,6 +984,7 @@ void MainWindow::updateStatus()
 
 void MainWindow::coreProcessStateChanged(ProcessState state)
 {
+  syncWorkspace();
   using enum ProcessState;
   updateStatus();
   if (state == Started) {
@@ -993,6 +1021,49 @@ void MainWindow::coreProcessStateChanged(ProcessState state)
     m_actionStopCore->setEnabled(false);
   }
   updateModeControlLabels();
+}
+
+void MainWindow::syncWorkspace()
+{
+  auto *dialog = findChild<WorkspaceDialog *>("workspaceDialog");
+  const bool server = m_coreProcess.mode() == CoreMode::Server;
+  if (m_workspaceService && (!m_coreProcess.isStarted() || server != m_workspaceServer)) {
+    if (dialog)
+      dialog->setService(nullptr);
+    delete m_workspaceService.data();
+    m_workspaceService = nullptr;
+    m_lastWorkspaceRuntime = {};
+  }
+  if (m_coreProcess.isStarted() && !m_workspaceService) {
+    m_workspaceServer = server;
+    m_workspaceService = new deskflow::workspace::WorkspaceService(server, this);
+    connect(
+        m_workspaceService, &deskflow::workspace::WorkspaceService::stateChanged, this,
+        [this](const QJsonObject &) { syncWorkspaceTopology(); }
+    );
+    m_workspaceService->start();
+    if (dialog)
+      dialog->setService(m_workspaceService);
+    if (!m_workspaceCoreIpc->isConnected() && !m_workspaceCoreIpc->isConnecting())
+      m_workspaceCoreIpc->connectToServer();
+  }
+}
+
+void MainWindow::syncWorkspaceTopology()
+{
+  if (!m_workspaceService || !m_workspaceCoreIpc->isConnected())
+    return;
+  const auto options =
+      QJsonDocument::fromJson(Settings::value(Settings::Workspace::Options).toString().toUtf8()).object();
+  const QJsonObject runtime{
+      {"action", "runtimeTopology"},
+      {"topology", deskflow::workspace::DisplayTopology::instance().serializedState()},
+      {"fileClipboardEnabled", options.value("enabled").toBool(true) && options.value("fileClipboard").toBool(true)}
+  };
+  if (runtime == m_lastWorkspaceRuntime)
+    return;
+  m_workspaceCoreIpc->sendWorkspaceCommand(runtime);
+  m_lastWorkspaceRuntime = runtime;
 }
 
 void MainWindow::coreConnectionStateChanged(ConnectionState state)

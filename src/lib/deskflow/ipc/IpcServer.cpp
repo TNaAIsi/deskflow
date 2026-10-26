@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
  */
 
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
+
 #include "IpcServer.h"
 
 #include "base/Log.h"
@@ -12,7 +16,43 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 
+#if defined(Q_OS_WIN)
+#include "platform/MSWindowsHandle.h"
+
+#include <Wtsapi32.h>
+#include <vector>
+#elif defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
+#include <sys/types.h>
+#include <unistd.h>
+#if defined(Q_OS_LINUX)
+#include <sys/socket.h>
+#endif
+#endif
+
 namespace deskflow::core::ipc {
+
+#if defined(Q_OS_WIN)
+namespace {
+
+PSID tokenUserSid(HANDLE token, std::vector<BYTE> &buffer)
+{
+  DWORD size = 0;
+  if (GetTokenInformation(token, TokenUser, nullptr, 0, &size) || GetLastError() != ERROR_INSUFFICIENT_BUFFER ||
+      size < sizeof(TOKEN_USER)) {
+    return nullptr;
+  }
+
+  buffer.resize(size);
+  if (!GetTokenInformation(token, TokenUser, buffer.data(), size, &size)) {
+    return nullptr;
+  }
+
+  const auto user = reinterpret_cast<TOKEN_USER *>(buffer.data());
+  return IsValidSid(user->User.Sid) ? user->User.Sid : nullptr;
+}
+
+} // namespace
+#endif
 
 IpcServer::IpcServer(QObject *parent, const QString &serverName, const QString &typeName)
     : QObject(parent),
@@ -30,17 +70,106 @@ IpcServer::~IpcServer()
 
 void IpcServer::listen()
 {
-  // The daemon may run as SYSTEM; a desktop core and its file-sharing commands
-  // belong to the active user. Do not grant other users access to those commands.
+#if defined(Q_OS_WIN)
+  // The service starts the core as SYSTEM in the desktop session. Its GUI must
+  // still be able to connect; workspace commands verify the peer separately.
+  m_server->setSocketOptions(QLocalServer::WorldAccessOption);
+#else
   m_server->setSocketOptions(m_typeName == "core" ? QLocalServer::UserAccessOption : QLocalServer::WorldAccessOption);
+#endif
 
   connect(m_server, &QLocalServer::newConnection, this, &IpcServer::handleNewConnection);
   QLocalServer::removeServer(m_serverName);
   if (m_server->listen(m_serverName)) {
     LOG_DEBUG("%s ipc server listening on: %s", m_typeName.constData(), m_serverName.toUtf8().constData());
   } else {
-    LOG_ERR("%s ipc server failed to listen on: %s", m_typeName.constData(), m_serverName.toUtf8().constData());
+    LOG_ERR(
+        "%s ipc server failed to listen on %s: %s", m_typeName.constData(), m_serverName.toUtf8().constData(),
+        qPrintable(m_server->errorString())
+    );
   }
+}
+
+bool IpcServer::authorizedWorkspaceClient(QLocalSocket *clientSocket) const
+{
+  if (!clientSocket || clientSocket->state() != QLocalSocket::ConnectedState) {
+    return false;
+  }
+
+#if defined(Q_OS_WIN)
+  // QLocalSocket's native descriptor on Windows is its named-pipe HANDLE.
+  // This handle belongs to Qt and must not be closed here.
+  const auto pipe = reinterpret_cast<HANDLE>(clientSocket->socketDescriptor());
+  ULONG peerProcessId = 0;
+  if (pipe == nullptr || pipe == INVALID_HANDLE_VALUE || !GetNamedPipeClientProcessId(pipe, &peerProcessId) ||
+      peerProcessId == 0) {
+    return false;
+  }
+
+  MSWindowsHandle peerProcess(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, peerProcessId));
+  if (peerProcess.get() == nullptr) {
+    return false;
+  }
+
+  HANDLE peerTokenHandle = nullptr;
+  if (!OpenProcessToken(peerProcess.get(), TOKEN_QUERY, &peerTokenHandle)) {
+    return false;
+  }
+  MSWindowsHandle peerToken(peerTokenHandle);
+
+  DWORD coreSession = 0;
+  DWORD peerSession = 0;
+  DWORD size = 0;
+  if (!ProcessIdToSessionId(GetCurrentProcessId(), &coreSession) ||
+      !GetTokenInformation(peerToken.get(), TokenSessionId, &peerSession, sizeof(peerSession), &size) ||
+      size != sizeof(peerSession) || peerSession != coreSession) {
+    return false;
+  }
+
+  HANDLE coreTokenHandle = nullptr;
+  if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &coreTokenHandle)) {
+    return false;
+  }
+  MSWindowsHandle coreToken(coreTokenHandle);
+
+  std::vector<BYTE> peerUserBuffer;
+  std::vector<BYTE> coreUserBuffer;
+  const auto peerSid = tokenUserSid(peerToken.get(), peerUserBuffer);
+  const auto coreSid = tokenUserSid(coreToken.get(), coreUserBuffer);
+  if (!peerSid || !coreSid) {
+    return false;
+  }
+
+  if (!IsWellKnownSid(coreSid, WinLocalSystemSid)) {
+    return EqualSid(peerSid, coreSid) != FALSE;
+  }
+
+  // SYSTEM is not the GUI's identity. Resolve the logged-on user of this
+  // particular core session on every command, including after a user switch.
+  HANDLE interactiveTokenHandle = nullptr;
+  if (!WTSQueryUserToken(coreSession, &interactiveTokenHandle)) {
+    return false;
+  }
+  MSWindowsHandle interactiveToken(interactiveTokenHandle);
+  std::vector<BYTE> interactiveUserBuffer;
+  const auto interactiveSid = tokenUserSid(interactiveToken.get(), interactiveUserBuffer);
+  return interactiveSid && EqualSid(peerSid, interactiveSid) != FALSE;
+#elif defined(Q_OS_MACOS)
+  // macOS does not enforce Unix-domain socket file permissions.
+  uid_t peerUser = 0;
+  gid_t peerGroup = 0;
+  return getpeereid(static_cast<int>(clientSocket->socketDescriptor()), &peerUser, &peerGroup) == 0 &&
+         peerUser == geteuid();
+#elif defined(Q_OS_LINUX)
+  ucred credentials{};
+  socklen_t size = sizeof(credentials);
+  return getsockopt(static_cast<int>(clientSocket->socketDescriptor()), SOL_SOCKET, SO_PEERCRED, &credentials, &size) ==
+             0 &&
+         size == sizeof(credentials) && credentials.uid == geteuid();
+#else
+  // Other platforms use the access restrictions configured by listen().
+  return true;
+#endif
 }
 
 void IpcServer::handleNewConnection()

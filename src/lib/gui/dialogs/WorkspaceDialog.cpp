@@ -4,7 +4,7 @@
  */
 #include "WorkspaceDialog.h"
 #include "common/Settings.h"
-#include "gui/ipc/CoreIpcClient.h"
+#include "workspace/AudioService.h"
 #include "workspace/DisplayLayoutDialog.h"
 #include "workspace/WorkspaceService.h"
 
@@ -48,6 +48,23 @@ qint64 number(const QJsonValue &value)
 {
   return value.isString() ? value.toString().toLongLong() : value.toInteger();
 }
+
+QString transferState(const QString &state)
+{
+  if (state == "complete")
+    return WorkspaceDialog::tr("Complete");
+  if (state == "transferring")
+    return WorkspaceDialog::tr("Transferring");
+  if (state == "requesting")
+    return WorkspaceDialog::tr("Requesting");
+  if (state == "offered")
+    return WorkspaceDialog::tr("Available");
+  if (state == "cancelled")
+    return WorkspaceDialog::tr("Cancelled");
+  if (state == "error")
+    return WorkspaceDialog::tr("Error");
+  return state;
+}
 } // namespace
 
 WorkspaceDropArea::WorkspaceDropArea(QWidget *parent) : QLabel(parent)
@@ -82,7 +99,6 @@ void WorkspaceDropArea::dropEvent(QDropEvent *event)
 
 WorkspaceDialog::WorkspaceDialog(QWidget *parent)
     : QDialog(parent),
-      m_ipc(new deskflow::gui::ipc::CoreIpcClient(this)),
       m_status(new QLabel(this)),
       m_audioStatus(new QLabel(this)),
       m_errors(new QLabel(this)),
@@ -151,8 +167,10 @@ WorkspaceDialog::WorkspaceDialog(QWidget *parent)
   auto *taskButtons = new QHBoxLayout;
   auto *cancel = new QPushButton(tr("Cancel transfer"), filesPage);
   auto *open = new QPushButton(tr("Open received location"), filesPage);
+  auto *clearCache = new QPushButton(tr("Clear completed clipboard cache"), filesPage);
   taskButtons->addWidget(cancel);
   taskButtons->addWidget(open);
+  taskButtons->addWidget(clearCache);
   taskButtons->addStretch();
   filesLayout->addLayout(taskButtons);
   tabs->addTab(filesPage, tr("Files"));
@@ -223,6 +241,7 @@ WorkspaceDialog::WorkspaceDialog(QWidget *parent)
   connect(receive, &QPushButton::clicked, this, &WorkspaceDialog::requestSelectedOffer);
   connect(cancel, &QPushButton::clicked, this, &WorkspaceDialog::cancelSelectedTransfer);
   connect(open, &QPushButton::clicked, this, &WorkspaceDialog::openSelectedTransfer);
+  connect(clearCache, &QPushButton::clicked, this, [this] { send({{"action", "clearFileCache"}}); });
   connect(editDisplays, &QPushButton::clicked, this, &WorkspaceDialog::editLayout);
   connect(m_audioSend, &QCheckBox::toggled, this, [this](bool enabled) {
     if (enabled)
@@ -232,40 +251,20 @@ WorkspaceDialog::WorkspaceDialog(QWidget *parent)
     if (enabled)
       m_audioSend->setChecked(false);
   });
-  connect(m_ipc, &deskflow::gui::ipc::CoreIpcClient::connected, this, [this] { send({{"action", "status"}}); });
-  connect(
-      m_ipc, &deskflow::gui::ipc::CoreIpcClient::commandReceived, this,
-      [this](const QString &command, const QString &args) {
-        if (command != "workspaceState")
-          return;
-        const auto document =
-            QJsonDocument::fromJson(QByteArray::fromBase64(args.toLatin1(), QByteArray::Base64UrlEncoding));
-        if (document.isObject())
-          refresh(document.object());
-      }
-  );
-  connect(m_ipc, &deskflow::gui::ipc::CoreIpcClient::connectionFailed, this, [this] {
-    m_status->setText(tr("Start Deskflow sharing first, then reopen this window. Preferences can still be saved."));
-  });
-  connect(m_ipc, &deskflow::gui::ipc::CoreIpcClient::serverShutdown, this, [this] {
-    m_status->setText(tr("Sharing stopped. Reopen this window after restarting Deskflow."));
-  });
   m_poll.setInterval(2000);
   connect(&m_poll, &QTimer::timeout, this, [this] {
-    if (m_ipc->isConnected())
-      send({{"action", "status"}});
-    else if (!m_ipc->isConnecting())
-      m_ipc->connectToServer();
+    if (m_service)
+      refresh(m_service->state());
   });
-  m_poll.start();
   auto options = deskflow::workspace::WorkspaceService::defaultOptions();
   const auto stored =
       QJsonDocument::fromJson(Settings::value(Settings::Workspace::Options).toString().toUtf8()).object();
   for (auto it = stored.begin(); it != stored.end(); ++it)
     options.insert(it.key(), it.value());
-  refresh({{"options", options}});
-  m_status->setText(tr("Connecting to the local sharing process…"));
-  m_ipc->connectToServer();
+  refresh(
+      {{"options", options}, {"audioDevices", deskflow::workspace::AudioService::outputDevices()}, {"running", false}}
+  );
+  m_status->setText(tr("Start sharing to connect the shared workspace."));
 }
 
 void WorkspaceDialog::updatePeers(QComboBox *combo, const QJsonArray &peers, const QString &emptyLabel)
@@ -324,7 +323,10 @@ void WorkspaceDialog::refresh(const QJsonObject &state)
       const auto device = value.toObject();
       m_audioOutput->addItem(device.value("name").toString(), device.value("id").toString());
     }
-    m_audioOutput->setCurrentIndex(qMax(0, m_audioOutput->findData(options.value("outputDeviceId").toString())));
+    const auto outputId = options.value("outputDeviceId").toString();
+    if (!outputId.isEmpty() && m_audioOutput->findData(outputId) < 0)
+      m_audioOutput->addItem(tr("%1 (offline)").arg(outputId), outputId);
+    m_audioOutput->setCurrentIndex(qMax(0, m_audioOutput->findData(outputId)));
     // Initial local fallback has no output inventory or connected peer list.
     m_loaded = state.contains("running");
     if (!m_loaded)
@@ -376,7 +378,7 @@ void WorkspaceDialog::refresh(const QJsonObject &state)
     const QStringList columns{
         transfer.value("name").toString(), transfer.value("peer").toString(),
         transfer.value("direction").toString() == "receive" ? tr("Receive") : tr("Send"),
-        QString("%1 / %2").arg(bytesLabel(done), bytesLabel(total)), transfer.value("state").toString()
+        QString("%1 / %2").arg(bytesLabel(done), bytesLabel(total)), transferState(transfer.value("state").toString())
     };
     for (int column = 0; column < columns.size(); ++column) {
       auto *item = new QTableWidgetItem(columns.at(column));
@@ -391,8 +393,24 @@ void WorkspaceDialog::refresh(const QJsonObject &state)
 
 void WorkspaceDialog::send(const QJsonObject &command)
 {
-  if (m_ipc->isConnected())
-    m_ipc->sendWorkspaceCommand(command);
+  if (m_service)
+    m_service->command(command);
+}
+
+void WorkspaceDialog::setService(deskflow::workspace::WorkspaceService *service)
+{
+  if (m_service)
+    disconnect(m_service, nullptr, this, nullptr);
+  m_service = service;
+  m_loaded = false;
+  if (service) {
+    connect(service, &deskflow::workspace::WorkspaceService::stateChanged, this, &WorkspaceDialog::refresh);
+    refresh(service->state());
+    m_poll.start();
+  } else {
+    m_poll.stop();
+    m_status->setText(tr("Start sharing to connect the shared workspace."));
+  }
 }
 
 void WorkspaceDialog::saveOptions()
@@ -418,7 +436,7 @@ void WorkspaceDialog::offerPaths(const QStringList &paths)
 {
   if (paths.isEmpty())
     return;
-  if (!m_ipc->isConnected()) {
+  if (!m_service) {
     QMessageBox::information(this, windowTitle(), tr("Start sharing before sending files."));
     return;
   }

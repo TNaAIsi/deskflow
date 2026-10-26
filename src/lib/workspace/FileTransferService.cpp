@@ -210,7 +210,7 @@ bool scanOffer(
   auto append = [&](const QFileInfo &info, const QString &relative) {
     if (stopped->load())
       return false;
-    if (info.isSymLink() || (!info.isDir() && !info.isFile())) {
+    if (info.isSymLink() || info.isJunction() || (!info.isDir() && !info.isFile())) {
       reason = "Symbolic links and special files cannot be shared: " + info.absoluteFilePath();
       return false;
     }
@@ -872,7 +872,6 @@ public:
 
 FileTransferService::FileTransferService(QObject *parent) : QObject(parent), d(std::make_unique<Private>(this))
 {
-  setClipboardEnabled(true);
 }
 
 FileTransferService::~FileTransferService() = default;
@@ -1018,6 +1017,33 @@ void FileTransferService::cancel(const QString &id)
   for (const auto &key : d->receiving.keys()) {
     if (d->receiving.value(key)->offer.id == id)
       d->fail(key, "Cancelled by user");
+  }
+}
+
+void FileTransferService::clearClipboardCache()
+{
+  if (!d->receiving.isEmpty() || !d->sending.isEmpty() || !d->scans.isEmpty()) {
+    Q_EMIT error(tr("Wait for file transfers to finish before clearing the clipboard cache."));
+    return;
+  }
+  const auto clipboard = nativeClipboardFiles();
+  if (!clipboard.available) {
+    Q_EMIT error(tr("The clipboard is busy; retry clearing the cache."));
+    return;
+  }
+  QDir cache(QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/file-clipboard");
+  const auto directories = cache.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+  for (const auto &directory : directories) {
+    if (directory.isSymLink() || directory.isJunction())
+      continue;
+    bool inUse = false;
+    for (const auto &path : clipboard.paths) {
+      const auto relative = QDir(directory.absoluteFilePath()).relativeFilePath(path);
+      if (!QDir::isAbsolutePath(relative) && relative != ".." && !relative.startsWith("../"))
+        inUse = true;
+    }
+    if (!inUse && !QDir(directory.absoluteFilePath()).removeRecursively())
+      Q_EMIT error(tr("Could not remove a completed clipboard cache folder: %1").arg(directory.fileName()));
   }
 }
 

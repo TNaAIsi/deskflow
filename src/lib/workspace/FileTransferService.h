@@ -39,6 +39,7 @@ public Q_SLOTS:
   void requestOffer(const QString &peer, const QString &id, const QString &destination = QString());
   void publishClipboardOffer(const QString &peer = QString());
   void cancel(const QString &id);
+  void clearClipboardCache();
 
 Q_SIGNALS:
   void outbound(QString peer, QString type, QJsonObject metadata, QByteArray payload);

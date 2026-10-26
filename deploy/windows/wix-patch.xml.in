@@ -1,4 +1,7 @@
 <CPackWiXPatch>
+  <CPackWiXFragment Id="CM_CP_deskflow.exe">
+    <firewall:FirewallException Id="WorkspaceFirewallException" Name="Deskflow Shared Workspace" Program="[INSTALL_ROOT]deskflow.exe" Scope="localSubnet"/>
+  </CPackWiXFragment>
   <CPackWiXFragment Id="CM_CP_deskflow_daemon.exe">
     <ServiceInstall
       Id="ServiceInstall"

@@ -1420,6 +1420,30 @@ Enabling this setting will disable the server config GUI.</source>
 <context>
     <name>WorkspaceDialog</name>
     <message>
+        <source>Complete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transferring</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Requesting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancelled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation type="unfinished">エラー</translation>
+    </message>
+    <message>
         <source>Enable shared workspace</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1504,6 +1528,10 @@ Enabling this setting will disable the server config GUI.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Clear completed clipboard cache</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Files</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1556,18 +1584,6 @@ Enabling this setting will disable the server config GUI.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Start Deskflow sharing first, then reopen this window. Preferences can still be saved.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Sharing stopped. Reopen this window after restarting Deskflow.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Connecting to the local sharing process…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>%1 (offline)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1597,6 +1613,10 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Send</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Start sharing to connect the shared workspace.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1718,6 +1738,21 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Move the monitors so their interiors do not overlap. Touching edges are allowed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>deskflow::workspace::FileTransferService</name>
+    <message>
+        <source>Wait for file transfers to finish before clearing the clipboard cache.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The clipboard is busy; retry clearing the cache.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not remove a completed clipboard cache folder: %1</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

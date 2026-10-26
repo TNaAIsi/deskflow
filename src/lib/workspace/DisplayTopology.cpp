@@ -193,12 +193,15 @@ DisplayTopology &DisplayTopology::instance()
 
 void DisplayTopology::initialize(const QString &localName)
 {
+  const bool firstInitialization = m_localName.isEmpty();
   m_localName = localName;
   auto *application = qobject_cast<QGuiApplication *>(QCoreApplication::instance());
   if (!application)
     return;
-  connect(application, &QGuiApplication::screenAdded, this, [this](QScreen *) { refreshLocalDisplays(); });
-  connect(application, &QGuiApplication::screenRemoved, this, [this](QScreen *) { refreshLocalDisplays(); });
+  if (firstInitialization) {
+    connect(application, &QGuiApplication::screenAdded, this, [this](QScreen *) { refreshLocalDisplays(); });
+    connect(application, &QGuiApplication::screenRemoved, this, [this](QScreen *) { refreshLocalDisplays(); });
+  }
   refreshLocalDisplays();
 }
 

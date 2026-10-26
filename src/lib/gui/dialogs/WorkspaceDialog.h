@@ -8,17 +8,18 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLabel>
+#include <QPointer>
 #include <QTimer>
+
+namespace deskflow::workspace {
+class WorkspaceService;
+}
 
 class QCheckBox;
 class QComboBox;
 class QListWidget;
 class QSpinBox;
 class QTableWidget;
-
-namespace deskflow::gui::ipc {
-class CoreIpcClient;
-}
 
 class WorkspaceDropArea : public QLabel
 {
@@ -38,8 +39,10 @@ class WorkspaceDialog : public QDialog
   Q_OBJECT
 public:
   explicit WorkspaceDialog(QWidget *parent = nullptr);
+  void setService(deskflow::workspace::WorkspaceService *service);
 
 private:
+  friend class WorkspaceDialogTests;
   void refresh(const QJsonObject &state);
   void saveOptions();
   void offerPaths(const QStringList &paths);
@@ -50,7 +53,6 @@ private:
   void send(const QJsonObject &command);
   void updatePeers(QComboBox *combo, const QJsonArray &peers, const QString &emptyLabel);
 
-  deskflow::gui::ipc::CoreIpcClient *m_ipc;
   QTimer m_poll;
   QJsonObject m_state;
   QLabel *m_status;
@@ -68,4 +70,5 @@ private:
   QListWidget *m_offers;
   QTableWidget *m_transfers;
   bool m_loaded = false;
+  QPointer<deskflow::workspace::WorkspaceService> m_service;
 };

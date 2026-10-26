@@ -491,6 +491,8 @@ void WorkspaceTransport::disconnected(QSslSocket *socket)
   if (!m_links.contains(socket))
     return;
   const auto link = m_links.take(socket);
+  if (link.welcomed && link.channel != Channel::Control)
+    Q_EMIT channelDisconnected(link.peer, link.channel);
   if (!m_server && link.channel == Channel::Control)
     m_connecting = false;
   if (!link.peer.isEmpty() && m_peers.contains(link.peer)) {
