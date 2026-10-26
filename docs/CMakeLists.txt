@@ -14,6 +14,8 @@ add_custom_target(docs ALL
     Security.md
     HelpMain.md
     Configuration.md
+    CrossPlatformExperience.md
+    WorkspaceGuide.zh-CN.md
     Issues.md
 )
 
@@ -22,6 +24,8 @@ install(
     Readme.md
     HelpMain.md
     Configuration.md
+    CrossPlatformExperience.md
+    WorkspaceGuide.zh-CN.md
     Issues.md
     Security.md
   DESTINATION ${CMAKE_INSTALL_DOCDIR}

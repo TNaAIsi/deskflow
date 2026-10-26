@@ -13,6 +13,7 @@ add_library(common STATIC
   Action.cpp
   Action.h
   Coordinate.h
+  EdgeSwitchPolicy.h
   Enums.h
   ExitCodes.h
   Hotkey.cpp

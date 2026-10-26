@@ -38,6 +38,16 @@
     </widget>
    </item>
    <item>
+    <widget class="QCheckBox" name="cbCapsLockInputSource">
+     <property name="toolTip">
+      <string>Use remote Caps Lock to switch between an enabled ASCII-capable input source and the last non-ASCII input source on this Mac. Keeps this Mac's input language independent of the server. Holding Caps Lock does not enable uppercase lock. Saving restarts sharing to apply this setting.</string>
+     </property>
+     <property name="text">
+      <string>Use Caps Lock to switch input sources on this Mac</string>
+     </property>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="groupBox">
      <property name="title">
       <string>Scroll Modifiers</string>

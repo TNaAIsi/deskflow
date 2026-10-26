@@ -165,6 +165,16 @@ public:
   */
   virtual bool isAnyMouseButtonDown(uint32_t &buttonID) const = 0;
 
+  //! Test whether a foreground application needs the local cursor
+  /*!
+  Called only before automatic edge switching. Explicit computer-switch
+  actions are not subject to this policy. Unsupported platforms return false.
+  */
+  virtual bool isAutomaticSwitchBlocked() const
+  {
+    return false;
+  }
+
   //! Get cursor center position
   /*!
   Return the cursor center position which is where we park the

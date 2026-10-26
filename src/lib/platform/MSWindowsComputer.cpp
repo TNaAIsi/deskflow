@@ -16,6 +16,7 @@
 #include "base/TMethodJob.h"
 #include "client/Client.h"
 #include "common/Constants.h"
+#include "common/EdgeSwitchPolicy.h"
 #include "common/Settings.h"
 #include "deskflow/App.h"
 #include "deskflow/ClientApp.h"
@@ -665,6 +666,45 @@ void MSWindowsComputer::fakeInputEnd()
 int32_t MSWindowsComputer::getJumpZoneSize() const
 {
   return 1;
+}
+
+bool MSWindowsComputer::isAutomaticSwitchBlocked() const
+{
+  // This query runs only when attempting to leave the local computer, never in
+  // the low-level mouse hook or for every interior mouse movement.
+  const HWND window = GetForegroundWindow();
+  if (window == nullptr || window == GetDesktopWindow() || window == GetShellWindow() || !IsWindowVisible(window) ||
+      IsIconic(window)) {
+    return false;
+  }
+
+  using deskflow::EdgeSwitchPolicy;
+  const auto toRect = [](const RECT &rect) {
+    return EdgeSwitchPolicy::Rect{
+        static_cast<int32_t>(rect.left), static_cast<int32_t>(rect.top), static_cast<int32_t>(rect.right),
+        static_cast<int32_t>(rect.bottom)
+    };
+  };
+
+  RECT windowRect{};
+  MONITORINFO monitorInfo{};
+  monitorInfo.cbSize = sizeof(monitorInfo);
+  const HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+  const bool hasWindowBounds = GetWindowRect(window, &windowRect) && GetMonitorInfo(monitor, &monitorInfo);
+  const bool borderless = (GetWindowLongPtr(window, GWL_STYLE) & WS_CAPTION) == 0;
+  const bool fullscreen = hasWindowBounds && borderless &&
+                          EdgeSwitchPolicy::coversMonitor(toRect(windowRect), toRect(monitorInfo.rcMonitor));
+
+  RECT clip{};
+  const int x = GetSystemMetrics(SM_XVIRTUALSCREEN);
+  const int y = GetSystemMetrics(SM_YVIRTUALSCREEN);
+  const EdgeSwitchPolicy::Rect desktop{
+      x, y, x + GetSystemMetrics(SM_CXVIRTUALSCREEN), y + GetSystemMetrics(SM_CYVIRTUALSCREEN)
+  };
+  // GetClipCursor also succeeds when no application confines the cursor. Only
+  // a smaller, valid region is meaningful; GetCapture is not a global query.
+  const bool confined = GetClipCursor(&clip) && EdgeSwitchPolicy::isRestrictiveClip(toRect(clip), desktop);
+  return EdgeSwitchPolicy::blocksAutomaticSwitch(fullscreen, confined);
 }
 
 bool MSWindowsComputer::isAnyMouseButtonDown(uint32_t &buttonID) const

@@ -173,6 +173,14 @@ p, li { white-space: pre-wrap; }
         <source>Use dynamic reconnection time based on connection attempts</source>
         <translation type="unfinished">Utilizza un tempo di riconnessione dinamico basato sui tentativi di connessione</translation>
     </message>
+    <message>
+        <source>Use remote Caps Lock to switch between an enabled ASCII-capable input source and the last non-ASCII input source on this Mac. Keeps this Mac&apos;s input language independent of the server. Holding Caps Lock does not enable uppercase lock. Saving restarts sharing to apply this setting.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use Caps Lock to switch input sources on this Mac</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ComputerSettingsDialog</name>
@@ -599,6 +607,10 @@ Vuoi connetterti al server?
         <translation>Disconnetti</translation>
     </message>
     <message>
+        <source>Shared workspace…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>%1 Connection Error</source>
         <translation>Errore di connessione %1</translation>
     </message>
@@ -921,6 +933,10 @@ Inoltre, verifica di poter %1 il file di configurazione del server: %2</translat
         <source>Super</source>
         <translation type="unfinished">Super</translation>
     </message>
+    <message>
+        <source>Disconnected</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>SearchWidget</name>
@@ -1095,6 +1111,14 @@ L&apos;abilitazione di questa impostazione disabiliterà l&apos;interfaccia graf
     <message>
         <source>Enable lock to computer at startup</source>
         <translation type="unfinished">Abilita il blocco al computer all&apos;avvio</translation>
+    </message>
+    <message>
+        <source>Keep the cursor on this Windows computer while its foreground window fills a monitor (including videos), or an application confines the cursor. Explicit switch hotkeys still work. This does not change manual cursor locking.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep cursor local during full-screen apps or capture</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -1390,6 +1414,344 @@ L&apos;abilitazione di questa impostazione disabiliterà l&apos;interfaccia graf
     <message>
         <source>Encryption Disabled</source>
         <translation>Crittografia disabilitata</translation>
+    </message>
+</context>
+<context>
+    <name>WorkspaceDialog</name>
+    <message>
+        <source>Enable shared workspace</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Share copied files and folders</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Share this Windows computer&apos;s system sound</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Play sound from the other computer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shared workspace</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source> MiB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No size limit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Automatically receive copied files up to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Send selected files to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose files…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose folder…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copy in Explorer or Finder, wait for transfer completion, then paste on the other computer. Source files remain unchanged. Larger offers and manually shared files are available below.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Available from other computers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save selected offer to…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Direction</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Progress</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>State</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel transfer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open received location</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sound routing stays fixed when the mouse changes computers. Enable sending on Windows and playback on the Mac. Local Windows output continues playing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>System sound capture is available on Windows.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Send sound to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Receive sound from</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Play through</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use wired networking and wired headphones for the lowest latency. Bluetooth adds its own playback delay. Sending and receiving simultaneously is disabled to prevent audio loops.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sound</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Arrange every physical monitor independently, including monitors belonging to the same computer. Touching edges define where the pointer crosses. Use Identify to match the layout to your desk.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Arrange individual monitors…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Monitors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Share files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Share folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Start Deskflow sharing first, then reopen this window. Preferences can still be saved.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sharing stopped. Reopen this window after restarting Deskflow.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Connecting to the local sharing process…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 (offline)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All connected computers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>First active source</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>System default output</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 · workspace port %2 · %3 connected computer(s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shared workspace is disabled or unavailable. Keyboard and mouse use their normal connection.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Receive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Send</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Start sharing before sending files.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save received files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Start sharing and connect the computers before arranging monitors.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>WorkspaceDropArea</name>
+    <message>
+        <source>Drop files or folders here to share with the selected computer</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>deskflow::workspace::AudioService</name>
+    <message>
+        <source>Waiting for system audio.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio output changed; waiting for the next audio frame.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>System audio sharing currently requires a Windows source computer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>System audio sharing stopped.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Selected audio output is disconnected. Choose another output or the system default.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The audio output does not support 48 kHz stereo audio.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio output failed (%1); retrying when audio resumes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not start the audio output.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Playing system audio from %1 on %2.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio source disconnected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rejected an invalid system audio frame from %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>deskflow::workspace::DisplayLayoutDialog</name>
+    <message>
+        <source>Arrange and route each monitor separately</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Individual monitor layout</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Drag each monitor to match your desk. Touching edges connect; colours identify computers. You can place a Mac monitor between two Windows monitors. This does not change system display settings.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Identify selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Fit monitors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Arrange in a row</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>X</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Y</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Width</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Height</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Select a monitor to edit its position and canvas size.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Overlapping monitors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Move the monitors so their interiors do not overlap. Touching edges are allowed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>deskflow::workspace::WorkspaceService</name>
+    <message>
+        <source>Workspace requires an input port from 1 to 65534.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Display layout was rejected; refresh the connected displays and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>deskflow::workspace::WorkspaceTransport</name>
+    <message>
+        <source>Workspace needs a valid Deskflow TLS certificate and SSL backend.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Workspace bind address must be an IP address.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Workspace port %1: %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Workspace connection failed: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Workspace peer certificate is not trusted by Deskflow.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>

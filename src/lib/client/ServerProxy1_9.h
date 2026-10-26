@@ -27,7 +27,7 @@ protected:
 private:
   void handleAudioConfig();
   void handleAudioData();
-  void startPlayback(int sampleRate, int channels, int bitDepth);
+  bool startPlayback(int sampleRate, int channels, int bitDepth);
   void stopPlayback();
 
   QAudioSink *m_audioSink = nullptr;

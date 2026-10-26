@@ -29,7 +29,10 @@ CoreIpcServer &CoreIpcServer::instance()
 
 void CoreIpcServer::processCommand(QLocalSocket *clientSocket, const QString &command, const QStringList &parts)
 {
-  Q_UNUSED(parts)
+  if (command == QStringLiteral("workspace") && parts.size() == 2 && parts.at(1).size() <= 1024 * 1024) {
+    Q_EMIT workspaceCommandReceived(parts.at(1));
+    return;
+  }
   if (command == QStringLiteral("stop")) {
     LOG_DEBUG("core ipc server got stop message");
     writeToClientSocket(clientSocket, QStringLiteral("ok"));

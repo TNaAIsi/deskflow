@@ -69,6 +69,8 @@ add_library(${target} STATIC
   dialogs/SettingsDialog.cpp
   dialogs/SettingsDialog.h
   dialogs/SettingsDialog.ui
+  dialogs/WorkspaceDialog.cpp
+  dialogs/WorkspaceDialog.h
   ipc/IpcClient.cpp
   ipc/IpcClient.h
   ipc/DaemonIpcClient.cpp
@@ -120,6 +122,7 @@ add_library(${target} STATIC
 target_link_libraries(${target}
   PUBLIC
     common
+    workspace
     platform
     net
     Qt6::Widgets

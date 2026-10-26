@@ -46,8 +46,10 @@ ServerConfigDialog::ServerConfigDialog(QWidget *parent, ServerConfig &config)
   ui->lblNewComputer->setPixmap(QIcon::fromTheme("video-display").pixmap(QSize(64, 64)));
   ui->btnBrowseConfigFile->setIcon(QIcon::fromTheme(QIcon::ThemeIcon::DocumentOpen));
 
-  if (!deskflow::platform::isWindows())
+  if (!deskflow::platform::isWindows()) {
     ui->cbWin32KeepForeground->setVisible(false);
+    ui->cbPreventFullscreenSwitch->setVisible(false);
+  }
   initConnections();
 }
 
@@ -89,6 +91,7 @@ void ServerConfigDialog::save()
   Settings::setValue(Settings::Server::EnableSwitchDoubleTap, m_enableSwitchDoubleTap);
   Settings::setValue(Settings::Server::SwitchDoubleTap, m_switchDoubleTap);
   Settings::setValue(Settings::Server::RelativeMouseMoves, m_relativeMouseMoves);
+  Settings::setValue(Settings::Server::PreventFullscreenSwitch, m_preventFullscreenSwitch);
   Settings::setValue(Settings::Server::Win32KeepForeground, m_win32keepForeground);
   Settings::setValue(Settings::Server::ExternalConfig, ui->groupExternalConfig->isChecked());
   Settings::setValue(Settings::Server::ExternalConfigFile, ui->lineConfigFile->text());
@@ -270,6 +273,14 @@ void ServerConfigDialog::setHeartbeat(int rate)
   setButtonBoxEnabledButtons();
 }
 
+void ServerConfigDialog::togglePreventFullscreenSwitch(bool enabled)
+{
+  if (m_preventFullscreenSwitch == enabled)
+    return;
+  m_preventFullscreenSwitch = enabled;
+  setButtonBoxEnabledButtons();
+}
+
 void ServerConfigDialog::toggleRelativeMouseMoves(bool enabled)
 {
   if (m_relativeMouseMoves == enabled)
@@ -389,6 +400,7 @@ void ServerConfigDialog::loadFromConfig()
   m_enableHeartbeat = Settings::value(Settings::Server::EnableHeartbeat).toBool();
   m_heartbeatRate = Settings::value(Settings::Server::Heartbeat).toInt();
   m_relativeMouseMoves = Settings::value(Settings::Server::RelativeMouseMoves).toBool();
+  m_preventFullscreenSwitch = Settings::value(Settings::Server::PreventFullscreenSwitch).toBool();
   m_win32keepForeground = Settings::value(Settings::Server::Win32KeepForeground).toBool();
   m_enableSwitchDelay = Settings::value(Settings::Server::EnableSwitchDelay).toBool();
   m_switchDelay = Settings::value(Settings::Server::SwitchDelay).toInt();
@@ -445,6 +457,7 @@ void ServerConfigDialog::refreshControls()
   ui->sbHeartbeat->setEnabled(ui->cbHeartbeat->isChecked());
   ui->sbHeartbeat->setValue(m_heartbeatRate);
   ui->cbRelativeMouseMoves->setChecked(m_relativeMouseMoves);
+  ui->cbPreventFullscreenSwitch->setChecked(m_preventFullscreenSwitch);
   ui->cbWin32KeepForeground->setChecked(m_win32keepForeground);
   ui->cbSwitchDelay->setChecked(m_enableSwitchDelay);
   ui->sbSwitchDelay->setEnabled(ui->cbSwitchDelay->isChecked());
@@ -499,6 +512,7 @@ void ServerConfigDialog::initConnections() const
   );
 
   connect(ui->cbRelativeMouseMoves, &QCheckBox::toggled, this, &ServerConfigDialog::toggleRelativeMouseMoves);
+  connect(ui->cbPreventFullscreenSwitch, &QCheckBox::toggled, this, &ServerConfigDialog::togglePreventFullscreenSwitch);
   connect(ui->cbEnableClipboard, &QCheckBox::toggled, this, &ServerConfigDialog::toggleClipboard);
   connect(ui->btnBrowseConfigFile, &QPushButton::clicked, this, &ServerConfigDialog::browseConfigFile);
   connect(ui->groupExternalConfig, &QGroupBox::toggled, this, &ServerConfigDialog::toggleExternalConfig);
@@ -530,6 +544,7 @@ void ServerConfigDialog::updateControls() const
   ui->rbProtocolSynergy->setEnabled(writable);
   ui->cbHeartbeat->setEnabled(writable);
   ui->cbRelativeMouseMoves->setEnabled(writable);
+  ui->cbPreventFullscreenSwitch->setEnabled(writable);
   ui->cbSwitchDelay->setEnabled(writable);
   ui->cbWin32KeepForeground->setEnabled(writable);
   ui->cbSwitchDoubleTap->setEnabled(writable);
@@ -545,6 +560,7 @@ void ServerConfigDialog::restoreFromDefaults()
   m_enableHeartbeat = Settings::defaultValue(Settings::Server::EnableHeartbeat).toBool();
   m_heartbeatRate = Settings::defaultValue(Settings::Server::Heartbeat).toInt();
   m_relativeMouseMoves = Settings::defaultValue(Settings::Server::RelativeMouseMoves).toBool();
+  m_preventFullscreenSwitch = Settings::defaultValue(Settings::Server::PreventFullscreenSwitch).toBool();
   m_win32keepForeground = Settings::defaultValue(Settings::Server::Win32KeepForeground).toBool();
   m_enableSwitchDelay = Settings::defaultValue(Settings::Server::EnableSwitchDelay).toBool();
   m_switchDelay = Settings::defaultValue(Settings::Server::SwitchDelay).toInt();
@@ -602,6 +618,7 @@ bool ServerConfigDialog::isGeneralConfigModified() const
          m_enableSwitchDoubleTap != Settings::value(Settings::Server::EnableSwitchDoubleTap).toBool() ||
          m_switchDoubleTap != Settings::value(Settings::Server::SwitchDoubleTap).toInt() ||
          m_relativeMouseMoves != Settings::value(Settings::Server::RelativeMouseMoves).toBool() ||
+         m_preventFullscreenSwitch != Settings::value(Settings::Server::PreventFullscreenSwitch).toBool() ||
          m_win32keepForeground != Settings::value(Settings::Server::Win32KeepForeground).toBool() ||
          m_disableLockToComputer != Settings::value(Settings::Server::DisableLockToComputer).toBool() ||
          m_defaultLockToComputerState != Settings::value(Settings::Server::DefaultLockToComputerState).toBool();
@@ -621,6 +638,7 @@ bool ServerConfigDialog::isGeneralConfigDefault() const
          m_enableSwitchDoubleTap == Settings::defaultValue(Settings::Server::EnableSwitchDoubleTap).toBool() &&
          m_switchDoubleTap == Settings::defaultValue(Settings::Server::SwitchDoubleTap).toInt() &&
          m_relativeMouseMoves == Settings::defaultValue(Settings::Server::RelativeMouseMoves).toBool() &&
+         m_preventFullscreenSwitch == Settings::defaultValue(Settings::Server::PreventFullscreenSwitch).toBool() &&
          m_win32keepForeground == Settings::defaultValue(Settings::Server::Win32KeepForeground).toBool() &&
          m_disableLockToComputer == Settings::defaultValue(Settings::Server::DisableLockToComputer).toBool() &&
          m_defaultLockToComputerState == Settings::defaultValue(Settings::Server::DefaultLockToComputerState).toBool();

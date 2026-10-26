@@ -135,6 +135,23 @@ static const KeyEntry s_controlKeys[] = {
 
 namespace {
 
+std::string inputSourceIdentifier(TISInputSourceRef source)
+{
+  const auto id = static_cast<CFStringRef>(TISGetInputSourceProperty(source, kTISPropertyInputSourceID));
+  if (!id)
+    return {};
+  const auto size = CFStringGetMaximumSizeForEncoding(CFStringGetLength(id), kCFStringEncodingUTF8) + 1;
+  std::vector<char> buffer(static_cast<size_t>(size));
+  return CFStringGetCString(id, buffer.data(), size, kCFStringEncodingUTF8) ? std::string(buffer.data())
+                                                                            : std::string{};
+}
+
+bool inputSourceProperty(TISInputSourceRef source, CFStringRef property)
+{
+  const auto value = static_cast<CFBooleanRef>(TISGetInputSourceProperty(source, property));
+  return value && CFBooleanGetValue(value);
+}
+
 io_connect_t getService(io_iterator_t iter)
 {
   io_connect_t service = 0;
@@ -215,8 +232,11 @@ AutoTISInputSourceRef copyKeyboardLayoutForKeyTranslation()
 // OSXKeyState
 //
 
-OSXKeyState::OSXKeyState(IEventQueue *events, std::vector<std::string> layouts, bool isLangSyncEnabled)
-    : KeyState(events, std::move(layouts), isLangSyncEnabled)
+OSXKeyState::OSXKeyState(
+    IEventQueue *events, std::vector<std::string> layouts, bool isLangSyncEnabled, bool capsLockInputSource
+)
+    : KeyState(events, std::move(layouts), isLangSyncEnabled && !capsLockInputSource),
+      m_capsInputSource(capsLockInputSource)
 {
   init();
 }
@@ -405,6 +425,85 @@ bool OSXKeyState::fakeCtrlAltDel()
 {
   // pass keys through unchanged
   return false;
+}
+
+void OSXKeyState::fakeKeyDown(KeyID id, KeyModifierMask mask, KeyButton button, const std::string &lang)
+{
+  const auto action = m_capsInputSource.press(id, mask, button);
+  if (action != deskflow::CapsLockInputSourcePolicy::PressResult::Forward) {
+    if (action == deskflow::CapsLockInputSourcePolicy::PressResult::SwitchInputSource && !toggleInputSource())
+      LOG_WARN("Caps Lock input-source switch failed: enable an ASCII and a non-ASCII input source on this Mac");
+    return;
+  }
+  KeyState::fakeKeyDown(m_capsInputSource.key(id, mask), m_capsInputSource.modifiers(mask), button, lang);
+}
+
+bool OSXKeyState::fakeKeyRepeat(
+    KeyID id, KeyModifierMask mask, int32_t count, KeyButton button, const std::string &lang
+)
+{
+  if (m_capsInputSource.consumesRepeat(id))
+    return true;
+  return KeyState::fakeKeyRepeat(
+      m_capsInputSource.key(id, mask), m_capsInputSource.modifiers(mask), count, button, lang
+  );
+}
+
+bool OSXKeyState::fakeKeyUp(KeyButton button)
+{
+  if (m_capsInputSource.release(button))
+    return true;
+  return KeyState::fakeKeyUp(button);
+}
+
+void OSXKeyState::fakeAllKeysUp()
+{
+  m_capsInputSource.reset();
+  KeyState::fakeAllKeysUp();
+}
+
+bool OSXKeyState::toggleInputSource()
+{
+  // Select input sources directly; global shortcuts can be reassigned by the
+  // user and do not represent an input-source action reliably.
+  std::lock_guard<std::mutex> lock(g_tisMutex);
+  AutoTISInputSourceRef current(TISCopyCurrentKeyboardInputSource(), CFRelease);
+  if (!current)
+    return false;
+
+  const bool currentASCII = inputSourceProperty(current.get(), kTISPropertyInputSourceIsASCIICapable);
+  auto &currentMemory = currentASCII ? m_lastASCIIInputSource : m_lastNonASCIIInputSource;
+  currentMemory = inputSourceIdentifier(current.get());
+  const auto &wantedID = currentASCII ? m_lastNonASCIIInputSource : m_lastASCIIInputSource;
+
+  CFStringRef keys[] = {kTISPropertyInputSourceCategory};
+  CFStringRef values[] = {kTISCategoryKeyboardInputSource};
+  AutoCFDictionary filter(
+      CFDictionaryCreate(nullptr, (const void **)keys, (const void **)values, 1, nullptr, nullptr), CFRelease
+  );
+  AutoCFArray sources(TISCreateInputSourceList(filter.get(), false), CFRelease);
+  if (!sources)
+    return false;
+
+  TISInputSourceRef target = nullptr;
+  for (CFIndex index = 0; index < CFArrayGetCount(sources.get()); ++index) {
+    auto source = static_cast<TISInputSourceRef>(const_cast<void *>(CFArrayGetValueAtIndex(sources.get(), index)));
+    if (!inputSourceProperty(source, kTISPropertyInputSourceIsEnabled) ||
+        !inputSourceProperty(source, kTISPropertyInputSourceIsSelectCapable) ||
+        inputSourceProperty(source, kTISPropertyInputSourceIsASCIICapable) == currentASCII)
+      continue;
+    if (!target)
+      target = source;
+    if (!wantedID.empty() && inputSourceIdentifier(source) == wantedID) {
+      target = source;
+      break;
+    }
+  }
+  if (!target || TISSelectInputSource(target) != noErr)
+    return false;
+  auto &targetMemory = currentASCII ? m_lastNonASCIIInputSource : m_lastASCIIInputSource;
+  targetMemory = inputSourceIdentifier(target);
+  return true;
 }
 
 bool OSXKeyState::fakeMediaKey(KeyID id)

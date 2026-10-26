@@ -10,6 +10,7 @@
 
 #include "base/IEventQueue.h"
 #include "base/Log.h"
+#include "common/EdgeSwitchPolicy.h"
 #include "deskflow/AppUtil.h"
 #include "deskflow/Computer.h"
 #include "deskflow/DeskflowException.h"
@@ -24,6 +25,7 @@
 #include "server/ClientProxy.h"
 #include "server/ClientProxyUnknown.h"
 #include "server/PrimaryClient.h"
+#include "workspace/DisplayTopology.h"
 
 #ifdef _WIN32
 #include <algorithm>
@@ -341,6 +343,10 @@ uint32_t Server::getActivePrimarySides() const
   using enum Direction;
   uint32_t sides = 0;
   if (!isLockedToComputerServer()) {
+    if (deskflow::workspace::DisplayTopology::instance().enabled()) {
+      return static_cast<int>(LeftMask) | static_cast<int>(RightMask) | static_cast<int>(TopMask) |
+             static_cast<int>(BottomMask);
+    }
     if (hasAnyNeighbor(m_primaryClient, Left)) {
       sides |= static_cast<int>(LeftMask);
     }
@@ -384,6 +390,13 @@ bool Server::isLockedToComputer() const
 
   // not locked
   return false;
+}
+
+bool Server::isAutomaticSwitchBlocked() const
+{
+  // Avoid native queries unless the enabled policy can affect this edge crossing.
+  return deskflow::EdgeSwitchPolicy::shouldInspectForeground(m_preventFullscreenSwitch, m_active == m_primaryClient) &&
+         m_computer->isAutomaticSwitchBlocked();
 }
 
 int32_t Server::getJumpZoneSize(const BaseClientProxy *client) const
@@ -796,6 +809,13 @@ bool Server::isSwitchOkay(
     return false;
   }
 
+  // Keep automatic protection separate from the user's manual lock state.
+  if (isAutomaticSwitchBlocked()) {
+    LOG_VERBOSE("automatic edge switching blocked by foreground application");
+    stopSwitch();
+    return false;
+  }
+
   // should we switch or not?
   bool preventSwitch = false;
   bool allowSwitch = false;
@@ -958,6 +978,8 @@ void Server::startSwitchWait(int32_t x, int32_t y)
   stopSwitchWait();
   m_switchWaitX = x;
   m_switchWaitY = y;
+  const auto &topology = deskflow::workspace::DisplayTopology::instance();
+  m_switchTopologyRevision = topology.enabled() ? topology.revision() : 0;
   m_switchWaitTimer = m_events->newOneShotTimer(m_switchWaitDelay, this);
   LOG_VERBOSE("waiting to switch");
 }
@@ -968,6 +990,7 @@ void Server::stopSwitchWait()
     m_events->deleteTimer(m_switchWaitTimer);
     m_switchWaitTimer = nullptr;
   }
+  m_switchTopologyRevision = 0;
 }
 
 bool Server::isSwitchWaitStarted() const
@@ -1101,6 +1124,8 @@ void Server::processOptions()
         m_switchTwoTapDelay = 0.0;
       }
       stopSwitchTwoTap();
+    } else if (id == kOptionPreventFullscreenSwitch) {
+      m_preventFullscreenSwitch = (value != 0);
     } else if (id == kOptionRelativeMouseMoves) {
       newRelativeMoves = (value != 0);
     } else if (id == kOptionDefaultLockToComputerState) {
@@ -1275,9 +1300,27 @@ void Server::handleWheelEvent(const Event &event)
 
 void Server::handleSwitchWaitTimeout()
 {
-  // ignore if mouse is locked to computer
-  if (isLockedToComputer()) {
-    LOG_VERBOSE("locked to computer");
+  // Recheck because the foreground application may change during the delay.
+  if (isLockedToComputer() || isAutomaticSwitchBlocked()) {
+    LOG_VERBOSE("automatic switch cancelled by cursor lock or foreground application");
+    stopSwitch();
+    return;
+  }
+
+  // A monitor can disappear while an edge-delay timer is running. Never use
+  // coordinates from a topology that no longer contains the destination.
+  const auto &topology = deskflow::workspace::DisplayTopology::instance();
+  if (m_switchTopologyRevision != 0 && m_switchTopologyRevision != topology.revision()) {
+    stopSwitch();
+    return;
+  }
+  if (topology.enabled() && m_switchComputer != nullptr &&
+      !topology.containsPoint(
+          QString::fromStdString(getName(m_switchComputer)), QPoint(m_switchWaitX, m_switchWaitY)
+      ) &&
+      !topology.containsPoint(
+          QString::fromStdString(m_switchComputer->getName()), QPoint(m_switchWaitX, m_switchWaitY)
+      )) {
     stopSwitch();
     return;
   }
@@ -1608,6 +1651,71 @@ void Server::onMouseUp(ButtonID id)
   m_active->mouseUp(id);
 }
 
+bool Server::routeDisplayMotion(int32_t oldX, int32_t oldY, int32_t x, int32_t y, bool primary)
+{
+  using Topology = deskflow::workspace::DisplayTopology;
+  const auto &topology = Topology::instance();
+  if (!topology.enabled())
+    return false;
+  // Legacy peers have no per-monitor geometry. Keep the complete old routing
+  // model while one is connected instead of trapping it behind a new layout.
+  for (const auto &[clientName, client] : m_clients) {
+    if (!topology.hasDevice(QString::fromStdString(clientName)) &&
+        !topology.hasDevice(QString::fromStdString(client->getName())))
+      return false;
+  }
+  auto name = QString::fromStdString(getName(m_active));
+  if (!topology.hasDevice(name))
+    name = QString::fromStdString(m_active->getName());
+  auto motion = topology.routeMotion(name, QPoint(oldX, oldY), QPoint(x, y), primary ? getJumpZoneSize(m_active) : 0);
+  if (!motion.handled)
+    return false;
+
+  if (motion.crossed && motion.targetDevice != name) {
+    auto destination = m_clients.find(motion.targetDevice.toStdString());
+    if (destination == m_clients.end()) {
+      const auto canonical = m_config->getCanonicalName(motion.targetDevice.toStdString());
+      destination = m_clients.find(canonical);
+    }
+    Direction direction = Direction::NoDirection;
+    switch (motion.edge) {
+    case Topology::Edge::Left:
+      direction = Direction::Left;
+      break;
+    case Topology::Edge::Right:
+      direction = Direction::Right;
+      break;
+    case Topology::Edge::Top:
+      direction = Direction::Top;
+      break;
+    case Topology::Edge::Bottom:
+      direction = Direction::Bottom;
+      break;
+    default:
+      break;
+    }
+    if (destination != m_clients.end() && isSwitchOkay(
+                                              destination->second, direction, motion.point.x(), motion.point.y(),
+                                              motion.sourcePoint.x(), motion.sourcePoint.y()
+                                          )) {
+      switchComputer(destination->second, motion.point.x(), motion.point.y(), false);
+      return true;
+    }
+    // Preserve a running delay or double-tap timer, but keep the cursor on its
+    // source display until the switch is accepted. Metadata availability alone
+    // never authorizes switching to an unconnected core client.
+    motion.point = motion.sourcePoint;
+  } else {
+    noSwitch(motion.point.x(), motion.point.y());
+  }
+
+  m_x = motion.point.x();
+  m_y = motion.point.y();
+  if (!primary || motion.point != QPoint(x, y))
+    m_active->mouseMove(m_x, m_y);
+  return true;
+}
+
 bool Server::onMouseMovePrimary(int32_t x, int32_t y)
 {
   LOG_VERBOSE("onMouseMovePrimary %d,%d", x, y);
@@ -1617,6 +1725,9 @@ bool Server::onMouseMovePrimary(int32_t x, int32_t y)
     // stale event -- we're actually on a secondary computer
     return false;
   }
+
+  const int32_t oldX = m_x;
+  const int32_t oldY = m_y;
 
   // save last delta
   m_xDelta2 = m_xDelta;
@@ -1629,6 +1740,9 @@ bool Server::onMouseMovePrimary(int32_t x, int32_t y)
   // save position
   m_x = x;
   m_y = y;
+
+  if (routeDisplayMotion(oldX, oldY, x, y, true))
+    return m_active != m_primaryClient;
 
   // get computer shape
   int32_t ax;
@@ -1756,6 +1870,9 @@ void Server::onMouseMoveSecondary(int32_t dx, int32_t dy)
   // accumulate motion
   m_x += dx;
   m_y += dy;
+
+  if (routeDisplayMotion(xOld, yOld, m_x, m_y, false))
+    return;
 
   // get computer shape
   int32_t ax;

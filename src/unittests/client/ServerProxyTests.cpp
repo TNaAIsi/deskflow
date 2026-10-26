@@ -10,10 +10,14 @@
 #include "base/IEventQueue.h"
 #include "client/Client.h"
 #include "client/ServerProxy.h"
+#include "client/ServerProxy1_9.h"
 #include "deskflow/AppUtil.h"
+#include "deskflow/DeskflowException.h"
 #include "deskflow/ProtocolTypes.h"
+#include "deskflow/ProtocolUtil.h"
 #include "io/IStream.h"
 
+#include <QScopeGuard>
 #include <QTest>
 
 #include <algorithm>
@@ -79,8 +83,16 @@ public:
     return static_cast<uint32_t>(bytesToRead);
   }
 
-  void write(const void *, uint32_t) override
+  void write(const void *buffer, uint32_t size) override
   {
+    m_written.append(static_cast<const char *>(buffer), size);
+  }
+
+  std::string takeWritten()
+  {
+    auto written = std::move(m_written);
+    m_written.clear();
+    return written;
   }
 
   void flush() override
@@ -118,6 +130,7 @@ public:
 private:
   std::deque<std::string> m_chunks;
   bool m_inputShutdown = false;
+  std::string m_written;
 };
 
 class RecordingEventQueue : public IEventQueue
@@ -246,6 +259,17 @@ public:
   }
 };
 
+class TestAudioServerProxy : public ServerProxy1_9
+{
+public:
+  using ServerProxy1_9::ServerProxy1_9;
+
+  bool configureAudio()
+  {
+    return parseMessage(reinterpret_cast<const uint8_t *>(kMsgDAudioConfig)) == ConnectionResult::Okay;
+  }
+};
+
 Client *undereferenceableClient()
 {
   // These paths must queue cleanup without calling through to Client.
@@ -326,6 +350,69 @@ void ServerProxyTests::parseHandshakeMessage_protocolError_queuesRefusalRequest(
   QVERIFY(request->kind() == Client::DisconnectRequest::Kind::Refuse);
   QVERIFY(request->refusalReason() == deskflow::core::ConnectionRefusal::ProtocolError);
   QCOMPARE(QString::fromUtf8(request->message()), QStringLiteral("server reported a protocol error"));
+}
+
+void ServerProxyTests::audio_rejectsDisabledOrUnsupportedConfiguration_data()
+{
+  QTest::addColumn<bool>("optIn");
+  QTest::addColumn<int>("enable");
+  QTest::addColumn<int>("sampleRate");
+  QTest::addColumn<int>("channels");
+  QTest::addColumn<int>("bitDepth");
+  QTest::addColumn<QString>("codec");
+
+  QTest::newRow("disabled-by-default") << false << 1 << 48000 << 2 << 16 << "pcm_s16le";
+  QTest::newRow("stop") << true << 0 << 48000 << 2 << 16 << "pcm_s16le";
+  QTest::newRow("invalid-enable") << true << 2 << 48000 << 2 << 16 << "pcm_s16le";
+  QTest::newRow("unsupported-codec") << true << 1 << 48000 << 2 << 16 << "opus";
+  QTest::newRow("unsupported-rate") << true << 1 << 44100 << 2 << 16 << "pcm_s16le";
+  QTest::newRow("unsupported-channels") << true << 1 << 48000 << 1 << 16 << "pcm_s16le";
+  QTest::newRow("unsupported-depth") << true << 1 << 48000 << 2 << 32 << "pcm_s16le";
+}
+
+void ServerProxyTests::audio_rejectsDisabledOrUnsupportedConfiguration()
+{
+  QFETCH(bool, optIn);
+  QFETCH(int, enable);
+  QFETCH(int, sampleRate);
+  QFETCH(int, channels);
+  QFETCH(int, bitDepth);
+  QFETCH(QString, codec);
+
+  const auto previous = qgetenv("DESKFLOW_AUDIO_TEST_TONE");
+  const auto restore = qScopeGuard([previous] {
+    if (previous.isNull()) {
+      qunsetenv("DESKFLOW_AUDIO_TEST_TONE");
+    } else {
+      qputenv("DESKFLOW_AUDIO_TEST_TONE", previous);
+    }
+  });
+  if (optIn) {
+    qputenv("DESKFLOW_AUDIO_TEST_TONE", "1");
+  } else {
+    qunsetenv("DESKFLOW_AUDIO_TEST_TONE");
+  }
+
+  RecordingEventQueue events;
+  FakeStream stream;
+  TestAudioServerProxy proxy(undereferenceableClient(), &stream, &events);
+  const auto codecBytes = codec.toStdString();
+  ProtocolUtil::writef(&stream, kMsgDAudioConfig, enable, sampleRate, channels, bitDepth, &codecBytes);
+  stream.push(stream.takeWritten().substr(4));
+
+  QVERIFY(proxy.configureAudio());
+  QCOMPARE(QByteArray::fromStdString(stream.takeWritten()), QByteArray("ARTS\0", 5));
+}
+
+void ServerProxyTests::audio_malformedConfigurationDoesNotSignalReady()
+{
+  RecordingEventQueue events;
+  FakeStream stream;
+  TestAudioServerProxy proxy(undereferenceableClient(), &stream, &events);
+  stream.push(std::string("\1", 1));
+
+  QVERIFY_THROWS_EXCEPTION(BadClientException, proxy.configureAudio());
+  QVERIFY(stream.takeWritten().empty());
 }
 
 QTEST_MAIN(ServerProxyTests)

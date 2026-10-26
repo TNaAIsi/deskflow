@@ -8,6 +8,7 @@
 #pragma once
 
 #include "OSXAutoTypes.h"
+#include "deskflow/CapsLockInputSourcePolicy.h"
 #include "deskflow/KeyState.h"
 
 #include <Carbon/Carbon.h>
@@ -26,7 +27,9 @@ class OSXKeyState : public KeyState
 public:
   using KeyIDs = std::vector<KeyID>;
 
-  OSXKeyState(IEventQueue *events, std::vector<std::string> layouts, bool isLangSyncEnabled);
+  OSXKeyState(
+      IEventQueue *events, std::vector<std::string> layouts, bool isLangSyncEnabled, bool capsLockInputSource = false
+  );
   OSXKeyState(IEventQueue *events, deskflow::KeyMap &keyMap, std::vector<std::string> layouts, bool isLangSyncEnabled);
   ~OSXKeyState() override = default;
 
@@ -79,6 +82,10 @@ public:
 
   // IKeyState overrides
   bool fakeCtrlAltDel() override;
+  void fakeKeyDown(KeyID id, KeyModifierMask mask, KeyButton button, const std::string &lang) override;
+  bool fakeKeyRepeat(KeyID id, KeyModifierMask mask, int32_t count, KeyButton button, const std::string &lang) override;
+  bool fakeKeyUp(KeyButton button) override;
+  void fakeAllKeysUp() override;
   bool fakeMediaKey(KeyID id) override;
   KeyModifierMask pollActiveModifiers() const override;
   int32_t pollActiveGroup() const override;
@@ -105,6 +112,7 @@ private:
 
   // Change active keyboard group to group
   void setGroup(int32_t group);
+  bool toggleInputSource();
 
   // Send an event for the given modifier key
   void handleModifierKey(void *target, uint32_t virtualKey, KeyID id, bool down, KeyModifierMask newMask);
@@ -168,4 +176,7 @@ private:
   bool m_controlRightPressed;
   bool m_altRightPressed;
   bool m_superRightPressed;
+  deskflow::CapsLockInputSourcePolicy m_capsInputSource;
+  std::string m_lastASCIIInputSource;
+  std::string m_lastNonASCIIInputSource;
 };

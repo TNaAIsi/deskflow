@@ -19,6 +19,7 @@
 #include "dialogs/HelpDialog.h"
 #include "dialogs/ServerConfigDialog.h"
 #include "dialogs/SettingsDialog.h"
+#include "dialogs/WorkspaceDialog.h"
 
 #include "common/PlatformInfo.h"
 #include "common/Settings.h"
@@ -666,6 +667,16 @@ void MainWindow::createMenuBar()
   m_menuFile->addAction(m_actionQuit);
 
   m_menuEdit->addAction(m_actionSettings);
+  auto *workspaceAction = m_menuEdit->addAction(tr("Shared workspace…"));
+  connect(workspaceAction, &QAction::triggered, this, [this] {
+    if (auto *dialog = findChild<WorkspaceDialog *>("workspaceDialog")) {
+      dialog->show();
+      dialog->raise();
+      dialog->activateWindow();
+    } else {
+      (new WorkspaceDialog(this))->show();
+    }
+  });
 
   m_menuView->addAction(m_logDock->toggleViewAction());
 

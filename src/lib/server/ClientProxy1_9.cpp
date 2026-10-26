@@ -16,6 +16,8 @@
 #include <cstring>
 #include <string>
 
+#include <QtGlobal>
+
 namespace {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kSineFrequency = 440.0; // A4
@@ -28,56 +30,81 @@ ClientProxy1_9::ClientProxy1_9(
     : ClientProxy1_8(name, adoptedStream, server, events),
       m_events(events)
 {
-  startAudio();
 }
 
 ClientProxy1_9::~ClientProxy1_9()
 {
   // Clean up timer without sending ACFG stop (stream may already be closed)
-  m_audioActive = false;
-  if (m_audioTimer != nullptr) {
-    m_events->removeHandler(EventTypes::Timer, m_audioTimer);
-    m_events->deleteTimer(m_audioTimer);
-    m_audioTimer = nullptr;
+  pauseAudio();
+}
+
+void ClientProxy1_9::setOptions(const OptionsList &options)
+{
+  ClientProxy1_8::setOptions(options);
+  // DSOP completes the client's handshake. Audio messages must follow it,
+  // and the test source must never start merely because a peer connected.
+  if (options.size() % 2 == 0 && qEnvironmentVariable("DESKFLOW_AUDIO_TEST_TONE") == "1") {
+    configureAudio();
   }
 }
 
-void ClientProxy1_9::startAudio()
+void ClientProxy1_9::configureAudio()
 {
-  if (m_audioActive) {
+  if (m_audioConfigured) {
     return;
   }
 
-  LOG_INFO("starting audio stream to client \"%s\"", getName().c_str());
+  LOG_INFO("offering audio test tone to client \"%s\"", getName().c_str());
 
   // Send ACFG start message: 48kHz, stereo, 16-bit PCM
   const std::string codec = "pcm_s16le";
   ProtocolUtil::writef(getStream(), kMsgDAudioConfig, 1, kSampleRate, kChannels, 16, &codec);
 
-  // Create a repeating timer (every 20ms) using the timer itself as event target
-  // to avoid colliding with the heartbeat handler registered on `this`.
-  m_audioTimer = m_events->newTimer(kFrameDurationMs / 1000.0, nullptr);
-  m_events->addHandler(EventTypes::Timer, m_audioTimer, [this](const auto &) { handleAudioTimer(); });
-
-  m_audioActive = true;
+  m_audioConfigured = true;
   m_audioSequence = 0;
   m_samplePosition = 0;
 }
 
-void ClientProxy1_9::stopAudio()
+bool ClientProxy1_9::parseMessage(const uint8_t *code)
 {
-  if (!m_audioActive) {
-    return;
+  if (memcmp(code, kMsgDAudioRTS, 4) != 0) {
+    return ClientProxy1_8::parseMessage(code);
   }
 
-  LOG_INFO("stopping audio stream to client \"%s\"", getName().c_str());
-  m_audioActive = false;
+  uint8_t ready = 0;
+  if (!ProtocolUtil::readf(getStream(), kMsgDAudioRTS + 4, &ready) || ready > 1) {
+    return false;
+  }
+  if (!ready) {
+    pauseAudio();
+  } else if (m_audioConfigured && !m_audioActive) {
+    // Wait for successful receiver initialization before producing any PCM.
+    m_audioTimer = m_events->newTimer(kFrameDurationMs / 1000.0, nullptr);
+    m_events->addHandler(EventTypes::Timer, m_audioTimer, [this](const auto &) { handleAudioTimer(); });
+    m_audioActive = true;
+  }
+  return true;
+}
 
+void ClientProxy1_9::pauseAudio()
+{
+  m_audioActive = false;
   if (m_audioTimer != nullptr) {
     m_events->removeHandler(EventTypes::Timer, m_audioTimer);
     m_events->deleteTimer(m_audioTimer);
     m_audioTimer = nullptr;
   }
+}
+
+void ClientProxy1_9::stopAudio()
+{
+  if (!m_audioConfigured) {
+    return;
+  }
+
+  LOG_INFO("stopping audio stream to client \"%s\"", getName().c_str());
+  pauseAudio();
+  m_audioConfigured = false;
 
   // Notify client to stop playback
   const std::string codec = "pcm_s16le";

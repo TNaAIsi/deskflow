@@ -16,6 +16,7 @@
 #include "deskflow/ClientApp.h"
 #include "deskflow/ServerApp.h"
 #include "deskflow/ipc/CoreIpcServer.h"
+#include "workspace/WorkspaceService.h"
 
 #if defined(Q_OS_WIN)
 #include "arch/win32/ArchMiscWindows.h"
@@ -23,9 +24,11 @@
 
 #include <QApplication>
 #include <QFileInfo>
+#include <QJsonDocument>
 #include <QSharedMemory>
 #include <QTextStream>
 #include <QThread>
+#include <QTimer>
 
 void qtMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &message)
 {
@@ -126,6 +129,27 @@ int main(int argc, char **argv)
       ipcServer, &deskflow::core::ipc::IpcServer::stopProcessRequested, coreApp, &App::quit, Qt::DirectConnection
   );
   ipcServer->listen();
+
+  deskflow::workspace::WorkspaceService workspace(parser.serverMode(), &app);
+  QObject::connect(
+      ipcServer, &deskflow::core::ipc::CoreIpcServer::workspaceCommandReceived, &workspace,
+      [&workspace](const QString &encoded) {
+        const auto bytes = QByteArray::fromBase64(encoded.toLatin1(), QByteArray::Base64UrlEncoding);
+        const auto document = QJsonDocument::fromJson(bytes);
+        if (document.isObject())
+          workspace.command(document.object());
+      }
+  );
+  QObject::connect(
+      &workspace, &deskflow::workspace::WorkspaceService::stateChanged, ipcServer,
+      [ipcServer](const QJsonObject &state) {
+        const auto encoded = QJsonDocument(state)
+                                 .toJson(QJsonDocument::Compact)
+                                 .toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals);
+        ipcServer->broadcastCommand("workspaceState", QString::fromLatin1(encoded));
+      }
+  );
+  QTimer::singleShot(0, &workspace, &deskflow::workspace::WorkspaceService::start);
 
   QThread coreThread;
   QObject::connect(&coreThread, &QThread::finished, &app, &QApplication::quit);

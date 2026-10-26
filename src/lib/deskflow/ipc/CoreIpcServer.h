@@ -24,6 +24,9 @@ public:
 
   static CoreIpcServer &instance();
 
+Q_SIGNALS:
+  void workspaceCommandReceived(const QString &encoded);
+
 private:
   void processCommand(QLocalSocket *clientSocket, const QString &command, const QStringList &parts) override;
 };

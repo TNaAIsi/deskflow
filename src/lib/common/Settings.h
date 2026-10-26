@@ -42,6 +42,7 @@ public:
     inline static const auto YScrollScale = QStringLiteral("client/yScrollScale");
     inline static const auto XScrollScale = QStringLiteral("client/xScrollScale");
     inline static const auto LanguageSync = QStringLiteral("client/languageSync");
+    inline static const auto CapsLockInputSource = QStringLiteral("client/capsLockInputSource");
     inline static const auto RemoteHost = QStringLiteral("client/remoteHost");
     inline static const auto XdpClipboardRetried = QStringLiteral("client/xdpClipboardRetried");
     inline static const auto XdpRestoreToken = QStringLiteral("client/xdpRestoreToken");
@@ -116,6 +117,7 @@ public:
     inline static const auto Heartbeat = QStringLiteral("server/heartbeat");
     inline static const auto Protocol = QStringLiteral("server/protocol");
     inline static const auto RelativeMouseMoves = QStringLiteral("server/relativeMouseMoves");
+    inline static const auto PreventFullscreenSwitch = QStringLiteral("server/preventFullscreenSwitch");
     inline static const auto SwitchDelay = QStringLiteral("server/switchDelay");
     inline static const auto SwitchDoubleTap = QStringLiteral("server/switchDoubleTap");
     inline static const auto Win32KeepForeground = QStringLiteral("server/win32KeepForeground");
@@ -164,6 +166,12 @@ public:
     inline static const auto RelativeMouseMoves = QStringLiteral("internalConfig/relativeMouseMoves");
     inline static const auto Protocol = QStringLiteral("internalConfig/protocol");
     inline static const auto ClipboardSharingSize = QStringLiteral("internalConfig/clipboardSharingSize");
+  };
+
+  struct Workspace
+  {
+    inline static const auto Options = QStringLiteral("workspace/options");
+    inline static const auto Layout = QStringLiteral("workspace/layout");
   };
 
   // Enums types used in settings
@@ -270,13 +278,17 @@ private:
     , QStringLiteral("security")
     , QStringLiteral("server")
     , QStringLiteral("internalConfig")
+    , QStringLiteral("workspace")
   };
 
   inline static const QStringList m_validKeys = {
-      Client::DynamicConnectionRetry
+      Workspace::Options
+    , Workspace::Layout
+    , Client::DynamicConnectionRetry
     , Client::InvertYScroll
     , Client::InvertXScroll
     , Client::LanguageSync
+    , Client::CapsLockInputSource
     , Client::RemoteHost
     , Client::YScrollScale
     , Client::XScrollScale
@@ -332,6 +344,7 @@ private:
     , Server::Heartbeat
     , Server::Protocol
     , Server::RelativeMouseMoves
+    , Server::PreventFullscreenSwitch
     , Server::SwitchDelay
     , Server::SwitchDoubleTap
     , Server::Win32KeepForeground
@@ -352,6 +365,7 @@ private:
     , Client::InvertYScroll
     , Client::InvertXScroll
     , Client::LanguageSync
+    , Client::CapsLockInputSource
     , Client::XdpClipboardRetried
     , Log::ToFile
     , Log::GuiDebug
@@ -362,6 +376,7 @@ private:
     , Server::EnableSwitchDoubleTap
     , Server::ExternalConfig
     , Server::RelativeMouseMoves
+    , Server::PreventFullscreenSwitch
     , Server::XdpClipboardRetried
   };
 

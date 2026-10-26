@@ -7,6 +7,7 @@
 #include "ClientProxyTests.h"
 
 #include "../deskflow/MockEventQueue.h"
+#include "base/Event.h"
 #include "deskflow/AppUtil.h"
 #include "io/IStream.h"
 #include "server/ClientProxy1_0.h"
@@ -14,12 +15,16 @@
 #include "server/ClientProxy1_6.h"
 #include "server/ClientProxy1_7.h"
 #include "server/ClientProxy1_8.h"
+#include "server/ClientProxy1_9.h"
 
+#include <algorithm>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include <QByteArray>
+#include <QScopeGuard>
 #include <QTest>
 
 namespace {
@@ -62,9 +67,19 @@ public:
   {
   }
 
-  uint32_t read(void *, uint32_t) override
+  uint32_t read(void *buffer, uint32_t size) override
   {
-    return 0;
+    const auto count = std::min(static_cast<qsizetype>(size), m_input.size());
+    if (buffer != nullptr) {
+      std::memcpy(buffer, m_input.constData(), count);
+    }
+    m_input.remove(0, count);
+    return static_cast<uint32_t>(count);
+  }
+
+  void push(const QByteArray &input)
+  {
+    m_input.append(input);
   }
 
   void flush() override
@@ -96,7 +111,55 @@ public:
 
 private:
   QByteArray m_buffer;
+  QByteArray m_input;
 };
+
+class AudioEventQueue : public MockEventQueue
+{
+public:
+  EventQueueTimer *newTimer(double, void *) override
+  {
+    ++timersStarted;
+    return reinterpret_cast<EventQueueTimer *>(&m_timerStorage);
+  }
+
+  void addHandler(EventTypes type, void *target, const EventHandler &handler) override
+  {
+    if (type == EventTypes::Timer && target == &m_timerStorage) {
+      audioHandler = handler;
+    }
+  }
+
+  int timersStarted = 0;
+  EventHandler audioHandler;
+
+private:
+  int m_timerStorage = 0;
+};
+
+class TestAudioProxy : public ClientProxy1_9
+{
+public:
+  using ClientProxy1_9::ClientProxy1_9;
+
+  bool ready(CapturingStream *stream, uint8_t ready)
+  {
+    stream->push(QByteArray(1, static_cast<char>(ready)));
+    return parseMessage(reinterpret_cast<const uint8_t *>(kMsgDAudioRTS));
+  }
+};
+
+auto restoreAudioEnvironment()
+{
+  const auto previous = qgetenv("DESKFLOW_AUDIO_TEST_TONE");
+  return qScopeGuard([previous] {
+    if (previous.isNull()) {
+      qunsetenv("DESKFLOW_AUDIO_TEST_TONE");
+    } else {
+      qputenv("DESKFLOW_AUDIO_TEST_TONE", previous);
+    }
+  });
+}
 
 std::unique_ptr<ClientProxy> makeProxy(int minor, deskflow::IStream *stream, IEventQueue *events)
 {
@@ -119,6 +182,9 @@ std::unique_ptr<ClientProxy> makeProxy(int minor, deskflow::IStream *stream, IEv
     break;
   case 8:
     proxy = std::make_unique<ClientProxy1_8>("client", stream, server, events);
+    break;
+  case 9:
+    proxy = std::make_unique<ClientProxy1_9>("client", stream, server, events);
     break;
   default:
     break;
@@ -166,6 +232,7 @@ void ClientProxyTests::keyDown_data()
   QTest::newRow("1.6") << 6 << "DKDN" + QByteArray::fromHex("0061 0000 001e");
   QTest::newRow("1.7") << 7 << "DKDN" + QByteArray::fromHex("0061 0000 001e");
   QTest::newRow("1.8") << 8 << "DKDL" + QByteArray::fromHex("0061 0000 001e 00000002") + "en";
+  QTest::newRow("1.9") << 9 << "DKDL" + QByteArray::fromHex("0061 0000 001e 00000002") + "en";
 }
 
 void ClientProxyTests::keyDown()
@@ -188,6 +255,7 @@ void ClientProxyTests::keyRepeat_data()
   QTest::newRow("1.6") << 6 << "DKRP" + QByteArray::fromHex("0061 0000 0003 001e");
   QTest::newRow("1.7") << 7 << "DKRP" + QByteArray::fromHex("0061 0000 0003 001e");
   QTest::newRow("1.8") << 8 << "DKRP" + QByteArray::fromHex("0061 0000 0003 001e 00000002") + "en";
+  QTest::newRow("1.9") << 9 << "DKRP" + QByteArray::fromHex("0061 0000 0003 001e 00000002") + "en";
 }
 
 void ClientProxyTests::keyRepeat()
@@ -210,6 +278,7 @@ void ClientProxyTests::keyUp_data()
   QTest::newRow("1.6") << 6 << "DKUP" + QByteArray::fromHex("0061 0000 001e");
   QTest::newRow("1.7") << 7 << "DKUP" + QByteArray::fromHex("0061 0000 001e");
   QTest::newRow("1.8") << 8 << "DKUP" + QByteArray::fromHex("0061 0000 001e");
+  QTest::newRow("1.9") << 9 << "DKUP" + QByteArray::fromHex("0061 0000 001e");
 }
 
 void ClientProxyTests::keyUp()
@@ -220,6 +289,81 @@ void ClientProxyTests::keyUp()
   ProxyUnderTest test(minor);
   test.proxy->keyUp(kKey, kMask, kButton);
   QCOMPARE(test.stream->take(), expected);
+}
+
+void ClientProxyTests::audio_defaultDisabled()
+{
+  const auto restore = restoreAudioEnvironment();
+  qunsetenv("DESKFLOW_AUDIO_TEST_TONE");
+  AudioEventQueue events;
+  auto *stream = new CapturingStream;
+  TestAudioProxy proxy("client", stream, reinterpret_cast<Server *>(0x1), &events);
+  QVERIFY(!stream->take().contains("ACFG"));
+
+  proxy.setOptions({});
+  QCOMPARE(stream->take(), "DSOP" + QByteArray::fromHex("00000000"));
+  QVERIFY(!proxy.isAudioActive());
+  QCOMPARE(events.timersStarted, 0);
+}
+
+void ClientProxyTests::audio_startsAfterOptionsAndReceiverReady()
+{
+  const auto restore = restoreAudioEnvironment();
+  qputenv("DESKFLOW_AUDIO_TEST_TONE", "1");
+  AudioEventQueue events;
+  auto *stream = new CapturingStream;
+  TestAudioProxy proxy("client", stream, reinterpret_cast<Server *>(0x1), &events);
+  QVERIFY(!stream->take().contains("ACFG"));
+  QCOMPARE(events.timersStarted, 0);
+
+  proxy.setOptions({});
+  const auto configuration = stream->take();
+  QVERIFY(configuration.startsWith("DSOP" + QByteArray::fromHex("00000000") + "ACFG"));
+  QCOMPARE(configuration.count("ACFG"), 1);
+  QVERIFY(!proxy.isAudioActive());
+  QCOMPARE(events.timersStarted, 0);
+
+  QVERIFY(proxy.ready(stream, 1));
+  QVERIFY(proxy.isAudioActive());
+  QCOMPARE(events.timersStarted, 1);
+  QVERIFY(static_cast<bool>(events.audioHandler));
+  events.audioHandler(Event(EventTypes::Timer, nullptr));
+  const auto frame = stream->take();
+  QVERIFY(frame.startsWith("ADAT" + QByteArray::fromHex("00000000 00000f00")));
+  QCOMPARE(frame.size(), 12 + 3840);
+
+  QVERIFY(proxy.ready(stream, 1));
+  QCOMPARE(events.timersStarted, 1);
+  proxy.setOptions({});
+  QVERIFY(!stream->take().contains("ACFG"));
+  QVERIFY(proxy.ready(stream, 0));
+  QVERIFY(!proxy.isAudioActive());
+  events.audioHandler(Event(EventTypes::Timer, nullptr));
+  QVERIFY(stream->take().isEmpty());
+}
+
+void ClientProxyTests::audio_invalidOptionsDoNotStart()
+{
+  const auto restore = restoreAudioEnvironment();
+  qputenv("DESKFLOW_AUDIO_TEST_TONE", "1");
+  ProxyUnderTest test(9);
+  test.proxy->setOptions({kOptionHeartbeat});
+  QVERIFY(test.stream->take().isEmpty());
+}
+
+void ClientProxyTests::audio_unsolicitedReadyDoesNotStart()
+{
+  const auto restore = restoreAudioEnvironment();
+  qunsetenv("DESKFLOW_AUDIO_TEST_TONE");
+  AudioEventQueue events;
+  auto *stream = new CapturingStream;
+  TestAudioProxy proxy("client", stream, reinterpret_cast<Server *>(0x1), &events);
+  stream->take();
+  QVERIFY(proxy.ready(stream, 1));
+  QVERIFY(!proxy.isAudioActive());
+  QCOMPARE(events.timersStarted, 0);
+  QVERIFY(stream->take().isEmpty());
+  QVERIFY(!proxy.ready(stream, 2));
 }
 
 QTEST_MAIN(ClientProxyTests)

@@ -30,8 +30,9 @@ IpcServer::~IpcServer()
 
 void IpcServer::listen()
 {
-  // IPC server normally runs as system, but GUI runs as regular user, so we need to allow world access.
-  m_server->setSocketOptions(QLocalServer::WorldAccessOption);
+  // The daemon may run as SYSTEM; a desktop core and its file-sharing commands
+  // belong to the active user. Do not grant other users access to those commands.
+  m_server->setSocketOptions(m_typeName == "core" ? QLocalServer::UserAccessOption : QLocalServer::WorldAccessOption);
 
   connect(m_server, &QLocalServer::newConnection, this, &IpcServer::handleNewConnection);
   QLocalServer::removeServer(m_serverName);
@@ -63,15 +64,14 @@ void IpcServer::handleReadyRead()
   const auto clientSocket = qobject_cast<QLocalSocket *>(sender());
   LOG_VERBOSE("%s ipc server ready to read data", m_typeName.constData());
 
-  QByteArray data = clientSocket->readAll();
-  if (data.isEmpty()) {
-    LOG_WARN("%s ipc server got empty message", m_typeName.constData());
+  auto &data = m_readBuffers[clientSocket];
+  data += clientSocket->readAll();
+  if (data.size() > 2 * 1024 * 1024) {
+    clientSocket->abort();
     return;
   }
-
-  // we don't handle incomplete messages yet; each socket read must have delimiters.
-  if (!data.contains('\n')) {
-    LOG_WARN("%s ipc server got incomplete message: %s", m_typeName.constData(), data.constData());
+  if (data.isEmpty()) {
+    LOG_WARN("%s ipc server got empty message", m_typeName.constData());
     return;
   }
 
@@ -90,6 +90,7 @@ void IpcServer::handleDisconnected()
   const auto clientSocket = qobject_cast<QLocalSocket *>(sender());
   LOG_DEBUG("%s ipc server client disconnected", m_typeName.constData());
   m_clients.remove(clientSocket);
+  m_readBuffers.remove(clientSocket);
   clientSocket->deleteLater();
 }
 
@@ -103,6 +104,7 @@ void IpcServer::handleErrorOccurred()
   }
 
   m_clients.remove(clientSocket);
+  m_readBuffers.remove(clientSocket);
   clientSocket->deleteLater();
 }
 
@@ -167,6 +169,14 @@ void IpcServer::broadcastCommand(const QString &command, const QString &args)
     LOG_VERBOSE(
         "%s ipc server has no clients, message queued: %s", m_typeName.constData(), message.toUtf8().constData()
     );
+    // A GUI may be closed for hours while transfers continue. Retain the last
+    // snapshot per command rather than accumulating every progress update.
+    const auto prefix = command + '=';
+    for (qsizetype i = m_pendingMessages.size(); i > 0; --i)
+      if (m_pendingMessages.at(i - 1).startsWith(prefix) || m_pendingMessages.at(i - 1) == command)
+        m_pendingMessages.removeAt(i - 1);
+    if (m_pendingMessages.size() >= 64)
+      m_pendingMessages.removeFirst();
     m_pendingMessages.append(message);
     return;
   }

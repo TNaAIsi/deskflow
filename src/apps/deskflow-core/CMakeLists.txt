@@ -36,6 +36,7 @@ target_link_libraries(
   platform
   server
   app
+  workspace
   Qt6::Widgets
   ${libs})
 

@@ -237,6 +237,9 @@ public:
   */
   bool isLockedToComputer() const;
 
+  //! Query the platform policy for automatic edge switching.
+  bool isAutomaticSwitchBlocked() const;
+
   //! Get jump zone size
   /*!
   Return the jump zone size, the size of the regions on the edges of

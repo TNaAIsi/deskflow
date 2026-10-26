@@ -8,6 +8,7 @@
 
 #include "common/Constants.h"
 
+#include <QJsonDocument>
 #include <QString>
 
 namespace deskflow::gui::ipc {
@@ -20,6 +21,14 @@ CoreIpcClient::CoreIpcClient(QObject *parent) : IpcClient(parent, kCoreIpcName, 
 void CoreIpcClient::sendStop()
 {
   sendMessage(QStringLiteral("stop"));
+}
+
+void CoreIpcClient::sendWorkspaceCommand(const QJsonObject &command)
+{
+  const auto encoded = QJsonDocument(command)
+                           .toJson(QJsonDocument::Compact)
+                           .toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals);
+  sendMessage(QStringLiteral("workspace=%1").arg(QString::fromLatin1(encoded)));
 }
 
 void CoreIpcClient::processCommand(const QString &command, const QStringList &parts)

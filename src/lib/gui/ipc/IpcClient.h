@@ -34,6 +34,10 @@ public:
   {
     return m_state == State::Connected;
   }
+  bool isConnecting() const
+  {
+    return m_state == State::Connecting;
+  }
 
 Q_SIGNALS:
   void connected();

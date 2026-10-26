@@ -8,7 +8,10 @@
 #include "deskflow/Computer.h"
 #include "base/IEventQueue.h"
 #include "base/Log.h"
+#include "deskflow/IClipboard.h"
 #include "deskflow/IPlatformComputer.h"
+#include "workspace/ClipboardFiles.h"
+#include "workspace/FileClipboardState.h"
 
 #include <QProcess>
 
@@ -206,11 +209,23 @@ void Computer::warpCursor(int32_t x, int32_t y)
 
 void Computer::setClipboard(ClipboardID id, const IClipboard *clipboard)
 {
+  if (deskflow::workspace::g_fileClipboardActive.load(std::memory_order_acquire)) {
+    bool hasContents = false;
+    if (clipboard && clipboard->open(clipboard->getTime())) {
+      for (const auto format : {IClipboard::Format::Text, IClipboard::Format::HTML, IClipboard::Format::Bitmap})
+        hasContents |= clipboard->has(format) && !clipboard->get(format).empty();
+      clipboard->close();
+    }
+    if (deskflow::workspace::preserveFileClipboard(hasContents))
+      return;
+  }
   m_computer->setClipboard(id, clipboard);
 }
 
 void Computer::grabClipboard(ClipboardID id)
 {
+  if (deskflow::workspace::preserveFileClipboard(false))
+    return;
   m_computer->setClipboard(id, nullptr);
 }
 
@@ -365,6 +380,11 @@ bool Computer::isLockedToComputer() const
   return false;
 }
 
+bool Computer::isAutomaticSwitchBlocked() const
+{
+  return m_computer->isAutomaticSwitchBlocked();
+}
+
 int32_t Computer::getJumpZoneSize() const
 {
   if (!m_isPrimary) {
@@ -396,6 +416,14 @@ void *Computer::getEventTarget() const
 
 bool Computer::getClipboard(ClipboardID id, IClipboard *clipboard) const
 {
+  // A native file copy can reach this legacy callback before the Qt polling
+  // interval. Mark it now so a fast pointer transition cannot erase the source
+  // clipboard while the file manifest is being prepared on the main thread.
+  if (deskflow::workspace::g_fileClipboardEnabled.load(std::memory_order_acquire)) {
+    const auto files = deskflow::workspace::nativeClipboardFiles();
+    if (files.available && !files.paths.isEmpty())
+      deskflow::workspace::g_fileClipboardActive.store(true, std::memory_order_release);
+  }
   return m_computer->getClipboard(id, clipboard);
 }
 

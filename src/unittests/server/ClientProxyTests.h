@@ -22,6 +22,10 @@ private Q_SLOTS:
   void keyRepeat();
   void keyUp_data();
   void keyUp();
+  void audio_defaultDisabled();
+  void audio_startsAfterOptionsAndReceiverReady();
+  void audio_invalidOptionsDoNotStart();
+  void audio_unsolicitedReadyDoesNotStart();
 
 private:
   Log m_log;

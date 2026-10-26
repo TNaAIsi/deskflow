@@ -89,6 +89,18 @@ if(WIN32)
     configure_file(cmake/vcpkg.json.in ${CMAKE_SOURCE_DIR}/vcpkg.json @ONLY)
 endif()
 
+# Fork installers must have a monotonic version independent of upstream tags.
+set(DESKFLOW_VERSION_OVERRIDE "" CACHE STRING "Override package version with major.minor.patch")
+if(DESKFLOW_VERSION_OVERRIDE)
+  if(NOT DESKFLOW_VERSION_OVERRIDE MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)$")
+    message(FATAL_ERROR "DESKFLOW_VERSION_OVERRIDE must be major.minor.patch")
+  endif()
+  set(DESKFLOW_VERSION_MAJOR "${CMAKE_MATCH_1}")
+  set(DESKFLOW_VERSION_MINOR "${CMAKE_MATCH_2}")
+  set(DESKFLOW_VERSION_PATCH "${CMAKE_MATCH_3}")
+  set(DESKFLOW_VERSION_TWEAK 0)
+endif()
+
 #Define our project
 project(
   deskflow

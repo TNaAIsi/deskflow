@@ -1,0 +1,59 @@
+name: Workspace installers
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup MSVC
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: amd64
+          spectre: true
+      - name: Install Qt OpenSSL and WiX
+        id: deps
+        uses: ./.github/actions/install-dependencies
+        with:
+          qt-version: 6.8.3
+          vcpkg-triplet: x64-windows-release
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTS=ON -DSKIP_BUILD_TESTS=ON
+          -DDESKFLOW_VERSION_OVERRIDE=1.28.0
+          -DPACKAGE_VERSION_LABEL=1.28.0-workspace
+          ${{ steps.deps.outputs.vcpkg-cmake-config }}
+      - name: Compile
+        run: cmake --build build --parallel 4
+      - name: Test without desktop input injection
+        run: ctest --test-dir build/src/unittests --output-on-failure -E "^(MSWindowsClipboardTests|OSXKeyStateTests|OSXClipboardTests)$"
+      - name: Build installers
+        run: cmake --build build --target package --parallel 4
+      - name: Include installation guide
+        shell: pwsh
+        run: |
+          Copy-Item docs/WorkspaceGuide.zh-CN.md build/使用说明.md
+          Get-ChildItem build/deskflow-*.msi,build/deskflow-*.zip | Get-FileHash -Algorithm SHA256 | Format-List | Out-File -Encoding utf8 build/SHA256.txt
+      - name: Upload packages and validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deskflow-workspace-windows-x64
+          path: |
+            build/deskflow-*.msi
+            build/deskflow-*.zip
+            build/使用说明.md
+            build/SHA256.txt
+            build/src/unittests/Testing/Temporary/LastTest.log
+          if-no-files-found: warn

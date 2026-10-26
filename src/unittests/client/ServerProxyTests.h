@@ -19,6 +19,9 @@ private Q_SLOTS:
   void handleKeepAliveAlarm_timeout_queuesDisconnectRequest();
   void handleData_incompleteMessage_queuesDisconnectRequest();
   void parseHandshakeMessage_protocolError_queuesRefusalRequest();
+  void audio_rejectsDisabledOrUnsupportedConfiguration_data();
+  void audio_rejectsDisabledOrUnsupportedConfiguration();
+  void audio_malformedConfigurationDoesNotSignalReady();
 
 private:
   Log m_log;

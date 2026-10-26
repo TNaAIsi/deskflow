@@ -7,6 +7,7 @@
 #include "client/ServerProxy1_9.h"
 
 #include "base/Log.h"
+#include "deskflow/DeskflowException.h"
 #include "deskflow/ProtocolTypes.h"
 #include "deskflow/ProtocolUtil.h"
 #include "io/IStream.h"
@@ -44,25 +45,30 @@ ServerProxy::ConnectionResult ServerProxy1_9::parseMessage(const uint8_t *code)
 
 void ServerProxy1_9::handleAudioConfig()
 {
-  uint32_t enable = 0;
-  uint32_t sampleRate = 0;
-  uint32_t channels = 0;
-  uint32_t bitDepth = 0;
+  uint8_t enable = 0;
+  uint16_t sampleRate = 0;
+  uint16_t channels = 0;
+  uint16_t bitDepth = 0;
   std::string codec;
 
-  ProtocolUtil::readf(getStream(), kMsgDAudioConfig + 4, &enable, &sampleRate, &channels, &bitDepth, &codec);
+  if (!ProtocolUtil::readf(getStream(), kMsgDAudioConfig + 4, &enable, &sampleRate, &channels, &bitDepth, &codec)) {
+    throw BadClientException("invalid audio configuration");
+  }
 
   LOG_INFO(
       "audio config: enable=%u rate=%u ch=%u bits=%u codec=%s", enable, sampleRate, channels, bitDepth, codec.c_str()
   );
 
-  if (enable) {
-    startPlayback(static_cast<int>(sampleRate), static_cast<int>(channels), static_cast<int>(bitDepth));
-    // Signal readiness to receive audio
-    ProtocolUtil::writef(getStream(), kMsgDAudioRTS, 1);
-  } else {
-    stopPlayback();
+  stopPlayback();
+  // Phase 1 is an explicitly enabled test source, not system audio sharing.
+  // Refuse unknown formats instead of reinterpreting their PCM bytes.
+  const bool supported = enable == 1 && qEnvironmentVariable("DESKFLOW_AUDIO_TEST_TONE") == "1" &&
+                         sampleRate == 48000 && channels == 2 && bitDepth == 16 && codec == "pcm_s16le";
+  const bool ready = supported && startPlayback(sampleRate, channels, bitDepth);
+  if (enable && !supported) {
+    LOG_WARN("audio test tone disabled or unsupported format");
   }
+  ProtocolUtil::writef(getStream(), kMsgDAudioRTS, ready ? 1 : 0);
 }
 
 void ServerProxy1_9::handleAudioData()
@@ -70,7 +76,9 @@ void ServerProxy1_9::handleAudioData()
   uint32_t seq = 0;
   std::string payload;
 
-  ProtocolUtil::readf(getStream(), kMsgDAudioData + 4, &seq, &payload);
+  if (!ProtocolUtil::readf(getStream(), kMsgDAudioData + 4, &seq, &payload)) {
+    throw BadClientException("invalid audio frame");
+  }
 
   if (!m_audioActive || m_audioDevice == nullptr) {
     return;
@@ -84,10 +92,17 @@ void ServerProxy1_9::handleAudioData()
   }
   ++m_expectedSequence;
 
-  m_audioDevice->write(payload.data(), payload.size());
+  // The prototype has no queue for partial writes. Stop rather than silently
+  // dropping PCM bytes and corrupting subsequent frame alignment.
+  if (payload.size() != 3840 ||
+      m_audioDevice->write(payload.data(), payload.size()) != static_cast<qint64>(payload.size())) {
+    LOG_WARN("audio test playback could not consume a complete frame");
+    stopPlayback();
+    ProtocolUtil::writef(getStream(), kMsgDAudioRTS, 0);
+  }
 }
 
-void ServerProxy1_9::startPlayback(int sampleRate, int channels, int bitDepth)
+bool ServerProxy1_9::startPlayback(int sampleRate, int channels, int bitDepth)
 {
   if (m_audioActive) {
     stopPlayback();
@@ -100,13 +115,13 @@ void ServerProxy1_9::startPlayback(int sampleRate, int channels, int bitDepth)
     format.setSampleFormat(QAudioFormat::Int16);
   } else {
     LOG_ERR("unsupported audio bit depth: %d", bitDepth);
-    return;
+    return false;
   }
 
   QAudioDevice device = QMediaDevices::defaultAudioOutput();
   if (!device.isFormatSupported(format)) {
-    LOG_WARN("audio format not supported by default output, trying nearest");
-    format = device.preferredFormat();
+    LOG_WARN("audio format not supported by default output");
+    return false;
   }
 
   m_audioSink = new QAudioSink(device, format);
@@ -117,16 +132,18 @@ void ServerProxy1_9::startPlayback(int sampleRate, int channels, int bitDepth)
   m_audioSink->setBufferSize(bufferBytes);
 
   m_audioDevice = m_audioSink->start();
-  if (m_audioDevice == nullptr) {
+  if (m_audioDevice == nullptr || m_audioSink->error() != QAudio::NoError) {
     LOG_ERR("failed to start audio playback, error code: %d", static_cast<int>(m_audioSink->error()));
     delete m_audioSink;
     m_audioSink = nullptr;
-    return;
+    m_audioDevice = nullptr;
+    return false;
   }
 
   m_audioActive = true;
   m_expectedSequence = 0;
   LOG_INFO("audio playback started: %dHz %dch %dbit", sampleRate, channels, bitDepth);
+  return true;
 }
 
 void ServerProxy1_9::stopPlayback()

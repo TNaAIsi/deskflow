@@ -29,6 +29,7 @@ add_library(${lib_name} STATIC ${PLATFORM_CODE}
   App.h
   AppUtil.cpp
   AppUtil.h
+  CapsLockInputSourcePolicy.h
   Chunk.cpp
   Chunk.h
   ClientApp.cpp
@@ -95,6 +96,7 @@ target_link_libraries(${lib_name}
     Qt6::Network
   PRIVATE
     platform
+    workspace
 )
 
 if(UNIX AND NOT APPLE)

@@ -122,7 +122,10 @@ OSXComputer::OSXComputer(IEventQueue *events, bool isPrimary, bool enableLangSyn
 
   try {
     m_screensaver = new OSXScreenSaver(m_events, getEventTarget());
-    m_keyState = new OSXKeyState(m_events, AppUtil::instance().getKeyboardLayoutList(), enableLangSync);
+    m_keyState = new OSXKeyState(
+        m_events, AppUtil::instance().getKeyboardLayoutList(), enableLangSync,
+        !m_isPrimary && Settings::value(Settings::Client::CapsLockInputSource).toBool()
+    );
 
     if (Settings::value(Settings::Core::PreventSleep).toBool()) {
       m_powerManager.disableSleep();

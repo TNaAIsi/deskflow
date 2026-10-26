@@ -8,6 +8,7 @@
 
 #include "IpcClient.h"
 
+#include <QJsonObject>
 #include <QObject>
 
 namespace deskflow::gui::ipc {
@@ -20,6 +21,7 @@ public:
   explicit CoreIpcClient(QObject *parent = nullptr);
 
   void sendStop();
+  void sendWorkspaceCommand(const QJsonObject &command);
 
 Q_SIGNALS:
   void commandReceived(const QString &command, const QString &args);

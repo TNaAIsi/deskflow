@@ -4,6 +4,10 @@ Deskflow is a free and open source keyboard and mouse sharing app. Use the keybo
 
 [Homepage](https://deskflow.org) [Code](https://github.com/deskflow/deskflo)
 
+## Cross-platform experience design
+
+The [product and technical design in Chinese](CrossPlatformExperience.md) describes target-system keyboard behavior, fullscreen protection, audio routing, file transfer, and individual monitor layout, with implementation stages and validation boundaries.
+
 ## Getting help online
 
  - View the [wiki](https://github.com/deskflow/deskflow/wiki) Online resource

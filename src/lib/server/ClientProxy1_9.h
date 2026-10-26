@@ -20,19 +20,25 @@ public:
   ClientProxy1_9(const std::string &name, deskflow::IStream *adoptedStream, Server *server, IEventQueue *events);
   ~ClientProxy1_9() override;
 
-  void startAudio();
+  void setOptions(const OptionsList &options) override;
   void stopAudio();
   [[nodiscard]] bool isAudioActive() const
   {
     return m_audioActive;
   }
 
+protected:
+  bool parseMessage(const uint8_t *code) override;
+
 private:
+  void configureAudio();
+  void pauseAudio();
   void handleAudioTimer();
   void sendAudioFrame();
 
   IEventQueue *m_events;
   EventQueueTimer *m_audioTimer = nullptr;
+  bool m_audioConfigured = false;
   bool m_audioActive = false;
   uint32_t m_audioSequence = 0;
   uint32_t m_samplePosition = 0;

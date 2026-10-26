@@ -173,6 +173,14 @@ p, li { white-space: pre-wrap; }
         <source>Use dynamic reconnection time based on connection attempts</source>
         <translation type="unfinished">根据连接尝试次数，采用动态重连时间</translation>
     </message>
+    <message>
+        <source>Use remote Caps Lock to switch between an enabled ASCII-capable input source and the last non-ASCII input source on this Mac. Keeps this Mac&apos;s input language independent of the server. Holding Caps Lock does not enable uppercase lock. Saving restarts sharing to apply this setting.</source>
+        <translation>使用远端 Caps Lock，在此 Mac 已启用的 ASCII 输入源与最近使用的非 ASCII 输入源之间切换，例如英文与中文。此 Mac 的输入语言将独立于服务端。长按 Caps Lock 不会开启大写锁定。保存后会重启共享以应用设置。</translation>
+    </message>
+    <message>
+        <source>Use Caps Lock to switch input sources on this Mac</source>
+        <translation>使用 Caps Lock 切换此 Mac 的输入法</translation>
+    </message>
 </context>
 <context>
     <name>ComputerSettingsDialog</name>
@@ -571,6 +579,10 @@ Do you want to connect to the server?
         <translation>断开</translation>
     </message>
     <message>
+        <source>Shared workspace…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>&lt;p&gt;Failed to connect to the server &apos;%1&apos;.&lt;/p&gt;&lt;p&gt;A Client with your name is already connected to the server.&lt;/p&gt;Please ensure that you&apos;re using a unique name and that only a single instance of the client process is running.&lt;/p&gt;</source>
         <translation>&lt;p&gt;连接到服务器“%1”失败。&lt;/p&gt;&lt;p&gt;一个同名的客户端已连接到服务器。&lt;/p&gt;请确保您使用的名称唯一，且只有一个客户端进程实例在运行。&lt;/p&gt;</translation>
     </message>
@@ -923,6 +935,10 @@ Additionally, check you are able to %1 the server config file: %2</source>
         <source>Super</source>
         <translation type="unfinished">Super</translation>
     </message>
+    <message>
+        <source>Disconnected</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>SearchWidget</name>
@@ -1097,6 +1113,14 @@ Enabling this setting will disable the server config GUI.</source>
     <message>
         <source>Enable lock to computer at startup</source>
         <translation type="unfinished">启动时启用锁定到计算机</translation>
+    </message>
+    <message>
+        <source>Keep the cursor on this Windows computer while its foreground window fills a monitor (including videos), or an application confines the cursor. Explicit switch hotkeys still work. This does not change manual cursor locking.</source>
+        <translation>当前台窗口占满显示器（包括全屏视频），或应用限制鼠标范围时，将鼠标保留在此 Windows 电脑上。仍可使用快捷键主动切换电脑。此选项不改变手动鼠标锁定。</translation>
+    </message>
+    <message>
+        <source>Keep cursor local during full-screen apps or capture</source>
+        <translation>全屏或应用限制鼠标时，禁止鼠标自动跨电脑</translation>
     </message>
 </context>
 <context>
@@ -1391,6 +1415,344 @@ Enabling this setting will disable the server config GUI.</source>
     <message>
         <source>Encryption Disabled</source>
         <translation>加密已禁用</translation>
+    </message>
+</context>
+<context>
+    <name>WorkspaceDialog</name>
+    <message>
+        <source>Enable shared workspace</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Share copied files and folders</source>
+        <translation>共享已复制的文件和文件夹</translation>
+    </message>
+    <message>
+        <source>Share this Windows computer&apos;s system sound</source>
+        <translation>共享此 Windows 电脑的系统声音</translation>
+    </message>
+    <message>
+        <source>Play sound from the other computer</source>
+        <translation>播放另一台电脑的声音</translation>
+    </message>
+    <message>
+        <source>Shared workspace</source>
+        <translation>共享工作台</translation>
+    </message>
+    <message>
+        <source> MiB</source>
+        <translation> MiB</translation>
+    </message>
+    <message>
+        <source>No size limit</source>
+        <translation>无大小限制</translation>
+    </message>
+    <message>
+        <source>Automatically receive copied files up to</source>
+        <translation>自动接收文件上限</translation>
+    </message>
+    <message>
+        <source>Send selected files to</source>
+        <translation>发送所选文件到</translation>
+    </message>
+    <message>
+        <source>Choose files…</source>
+        <translation>选择文件…</translation>
+    </message>
+    <message>
+        <source>Choose folder…</source>
+        <translation>选择文件夹…</translation>
+    </message>
+    <message>
+        <source>Copy in Explorer or Finder, wait for transfer completion, then paste on the other computer. Source files remain unchanged. Larger offers and manually shared files are available below.</source>
+        <translation>在 Explorer 或 Finder 复制文件，等待传输完成，再到另一台电脑粘贴。源文件会保留。超过自动接收上限或手动分享的文件可在下方接收。</translation>
+    </message>
+    <message>
+        <source>Available from other computers</source>
+        <translation>其他电脑可接收的文件</translation>
+    </message>
+    <message>
+        <source>Save selected offer to…</source>
+        <translation>保存所选文件到…</translation>
+    </message>
+    <message>
+        <source>File</source>
+        <translation>文件</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>电脑</translation>
+    </message>
+    <message>
+        <source>Direction</source>
+        <translation>方向</translation>
+    </message>
+    <message>
+        <source>Progress</source>
+        <translation>进度</translation>
+    </message>
+    <message>
+        <source>State</source>
+        <translation>状态</translation>
+    </message>
+    <message>
+        <source>Cancel transfer</source>
+        <translation>取消传输</translation>
+    </message>
+    <message>
+        <source>Open received location</source>
+        <translation>打开接收位置</translation>
+    </message>
+    <message>
+        <source>Files</source>
+        <translation>文件</translation>
+    </message>
+    <message>
+        <source>Sound routing stays fixed when the mouse changes computers. Enable sending on Windows and playback on the Mac. Local Windows output continues playing.</source>
+        <translation>声音去向不随鼠标切换而改变。在 Windows 启用发送，在 Mac 启用播放；Windows 本机仍会播放原声音。</translation>
+    </message>
+    <message>
+        <source>System sound capture is available on Windows.</source>
+        <translation>系统声音采集适用于 Windows。</translation>
+    </message>
+    <message>
+        <source>Send sound to</source>
+        <translation>发送声音到</translation>
+    </message>
+    <message>
+        <source>Receive sound from</source>
+        <translation>接收声音来源</translation>
+    </message>
+    <message>
+        <source>Play through</source>
+        <translation>播放设备</translation>
+    </message>
+    <message>
+        <source>Use wired networking and wired headphones for the lowest latency. Bluetooth adds its own playback delay. Sending and receiving simultaneously is disabled to prevent audio loops.</source>
+        <translation>有线网络和有线耳机适合低延迟使用。蓝牙会增加播放延迟。为避免声音回环，发送和接收不能同时启用。</translation>
+    </message>
+    <message>
+        <source>Sound</source>
+        <translation>声音</translation>
+    </message>
+    <message>
+        <source>Arrange every physical monitor independently, including monitors belonging to the same computer. Touching edges define where the pointer crosses. Use Identify to match the layout to your desk.</source>
+        <translation>每块显示器都可以单独摆放，包括同一台电脑的多个显示器。相接的边缘决定鼠标穿越的位置。可通过识别功能对照真实屏幕。</translation>
+    </message>
+    <message>
+        <source>Arrange individual monitors…</source>
+        <translation>单独排列显示器…</translation>
+    </message>
+    <message>
+        <source>Monitors</source>
+        <translation>显示器</translation>
+    </message>
+    <message>
+        <source>Share files</source>
+        <translation>分享文件</translation>
+    </message>
+    <message>
+        <source>Share folder</source>
+        <translation>分享文件夹</translation>
+    </message>
+    <message>
+        <source>Start Deskflow sharing first, then reopen this window. Preferences can still be saved.</source>
+        <translation>请先启动 Deskflow 共享；窗口将自动重连。当前仍可保存偏好设置。</translation>
+    </message>
+    <message>
+        <source>Sharing stopped. Reopen this window after restarting Deskflow.</source>
+        <translation>共享已停止，重新启动后窗口将自动重连。</translation>
+    </message>
+    <message>
+        <source>Connecting to the local sharing process…</source>
+        <translation>正在连接本机共享进程…</translation>
+    </message>
+    <message>
+        <source>%1 (offline)</source>
+        <translation>%1（已离线）</translation>
+    </message>
+    <message>
+        <source>All connected computers</source>
+        <translation>所有已连接电脑</translation>
+    </message>
+    <message>
+        <source>First active source</source>
+        <translation>首个活动来源</translation>
+    </message>
+    <message>
+        <source>System default output</source>
+        <translation>系统默认输出</translation>
+    </message>
+    <message>
+        <source>%1 · workspace port %2 · %3 connected computer(s)</source>
+        <translation>%1 · 工作台端口 %2 · 已连接 %3 台电脑</translation>
+    </message>
+    <message>
+        <source>Shared workspace is disabled or unavailable. Keyboard and mouse use their normal connection.</source>
+        <translation>共享工作台已关闭或不可用。键鼠继续使用原有连接。</translation>
+    </message>
+    <message>
+        <source>Receive</source>
+        <translation>接收</translation>
+    </message>
+    <message>
+        <source>Send</source>
+        <translation>发送</translation>
+    </message>
+    <message>
+        <source>Start sharing before sending files.</source>
+        <translation>请先启动共享，再发送文件。</translation>
+    </message>
+    <message>
+        <source>Save received files</source>
+        <translation>保存接收文件</translation>
+    </message>
+    <message>
+        <source>Start sharing and connect the computers before arranging monitors.</source>
+        <translation>请先启动共享并连接电脑，再排列显示器。</translation>
+    </message>
+</context>
+<context>
+    <name>WorkspaceDropArea</name>
+    <message>
+        <source>Drop files or folders here to share with the selected computer</source>
+        <translation>将文件或文件夹拖到这里，分享给所选电脑</translation>
+    </message>
+</context>
+<context>
+    <name>deskflow::workspace::AudioService</name>
+    <message>
+        <source>Waiting for system audio.</source>
+        <translation>正在等待系统声音。</translation>
+    </message>
+    <message>
+        <source>Audio output changed; waiting for the next audio frame.</source>
+        <translation>输出设备已更改，正在等待声音数据。</translation>
+    </message>
+    <message>
+        <source>System audio sharing currently requires a Windows source computer.</source>
+        <translation>当前系统声音共享需要由 Windows 电脑提供音源。</translation>
+    </message>
+    <message>
+        <source>System audio sharing stopped.</source>
+        <translation>系统声音共享已停止。</translation>
+    </message>
+    <message>
+        <source>Selected audio output is disconnected. Choose another output or the system default.</source>
+        <translation>所选输出设备已断开，请选择其他设备或系统默认输出。</translation>
+    </message>
+    <message>
+        <source>The audio output does not support 48 kHz stereo audio.</source>
+        <translation>输出设备不支持 48 kHz 双声道音频。</translation>
+    </message>
+    <message>
+        <source>Audio output failed (%1); retrying when audio resumes.</source>
+        <translation>声音输出失败（%1），声音恢复后将重试。</translation>
+    </message>
+    <message>
+        <source>Could not start the audio output.</source>
+        <translation>无法启动声音输出。</translation>
+    </message>
+    <message>
+        <source>Playing system audio from %1 on %2.</source>
+        <translation>正在通过 %2 播放来自 %1 的系统声音。</translation>
+    </message>
+    <message>
+        <source>Audio source disconnected.</source>
+        <translation>声音来源已断开。</translation>
+    </message>
+    <message>
+        <source>Rejected an invalid system audio frame from %1.</source>
+        <translation>已拒绝来自 %1 的无效音频数据。</translation>
+    </message>
+</context>
+<context>
+    <name>deskflow::workspace::DisplayLayoutDialog</name>
+    <message>
+        <source>Arrange and route each monitor separately</source>
+        <translation>分别排列和路由每块显示器</translation>
+    </message>
+    <message>
+        <source>Individual monitor layout</source>
+        <translation>独立显示器布局</translation>
+    </message>
+    <message>
+        <source>Drag each monitor to match your desk. Touching edges connect; colours identify computers. You can place a Mac monitor between two Windows monitors. This does not change system display settings.</source>
+        <translation>拖动每块显示器，对照桌面上的实际摆放。相接的边缘会连接，不同颜色表示不同电脑。可以将 Mac 屏幕放在两块 Windows 屏幕之间；不会改变系统显示设置。</translation>
+    </message>
+    <message>
+        <source>Identify selected</source>
+        <translation>识别所选显示器</translation>
+    </message>
+    <message>
+        <source>Fit monitors</source>
+        <translation>适配视图</translation>
+    </message>
+    <message>
+        <source>Arrange in a row</source>
+        <translation>排列成一行</translation>
+    </message>
+    <message>
+        <source>X</source>
+        <translation>X</translation>
+    </message>
+    <message>
+        <source>Y</source>
+        <translation>Y</translation>
+    </message>
+    <message>
+        <source>Width</source>
+        <translation>宽度</translation>
+    </message>
+    <message>
+        <source>Height</source>
+        <translation>高度</translation>
+    </message>
+    <message>
+        <source>Select a monitor to edit its position and canvas size.</source>
+        <translation>选择一块显示器，编辑它的位置和画布尺寸。</translation>
+    </message>
+    <message>
+        <source>Overlapping monitors</source>
+        <translation>显示器重叠</translation>
+    </message>
+    <message>
+        <source>Move the monitors so their interiors do not overlap. Touching edges are allowed.</source>
+        <translation>请移动显示器，使内部区域不重叠。边缘可以相接。</translation>
+    </message>
+</context>
+<context>
+    <name>deskflow::workspace::WorkspaceService</name>
+    <message>
+        <source>Workspace requires an input port from 1 to 65534.</source>
+        <translation>工作台要求键鼠端口介于 1 和 65534 之间。</translation>
+    </message>
+    <message>
+        <source>Display layout was rejected; refresh the connected displays and try again.</source>
+        <translation>布局未通过检查，请刷新已连接的显示器后重试。</translation>
+    </message>
+</context>
+<context>
+    <name>deskflow::workspace::WorkspaceTransport</name>
+    <message>
+        <source>Workspace needs a valid Deskflow TLS certificate and SSL backend.</source>
+        <translation>工作台需要有效的 Deskflow TLS 证书及 SSL 支持。</translation>
+    </message>
+    <message>
+        <source>Workspace bind address must be an IP address.</source>
+        <translation>工作台监听地址必须为 IP 地址。</translation>
+    </message>
+    <message>
+        <source>Workspace port %1: %2</source>
+        <translation>工作台端口 %1：%2</translation>
+    </message>
+    <message>
+        <source>Workspace connection failed: %1</source>
+        <translation>工作台连接失败：%1</translation>
+    </message>
+    <message>
+        <source>Workspace peer certificate is not trusted by Deskflow.</source>
+        <translation>对端证书尚未被 Deskflow 信任。</translation>
     </message>
 </context>
 <context>

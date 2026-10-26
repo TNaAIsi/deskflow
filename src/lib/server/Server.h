@@ -217,6 +217,11 @@ private:
   // returns true iff mouse should be locked to the current m_computer
   // according to this object or the primary client.
   bool isLockedToComputer() const;
+  bool isAutomaticSwitchBlocked() const;
+
+  // Handle physical monitor edges using the workspace topology. Returns false
+  // when the connected device still uses the legacy whole-desktop model.
+  bool routeDisplayMotion(int32_t oldX, int32_t oldY, int32_t x, int32_t y, bool primary);
 
   // returns the jump zone of the client
   int32_t getJumpZoneSize(const BaseClientProxy *) const;
@@ -445,6 +450,7 @@ private:
   // state for delayed computer switching
   int32_t m_switchWaitX;
   int32_t m_switchWaitY;
+  uint64_t m_switchTopologyRevision = 0;
 
   int32_t m_switchTwoTapZone = 3;
 
@@ -464,6 +470,7 @@ private:
 
   // computer locking (former scroll lock)
   bool m_lockedToComputer = false;
+  bool m_preventFullscreenSwitch = false;
 
   bool m_defaultLockToComputerState = false;
   bool m_disableLockToComputer = false;
