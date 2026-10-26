@@ -209,16 +209,11 @@ void Computer::warpCursor(int32_t x, int32_t y)
 
 void Computer::setClipboard(ClipboardID id, const IClipboard *clipboard)
 {
-  if (deskflow::workspace::g_fileClipboardEnabled.load(std::memory_order_acquire)) {
-    const auto files = deskflow::workspace::nativeClipboardFiles();
-    if (files.available)
-      deskflow::workspace::g_fileClipboardActive.store(!files.paths.isEmpty(), std::memory_order_release);
-  }
-  if (deskflow::workspace::g_fileClipboardActive.load(std::memory_order_acquire)) {
+  if (deskflow::workspace::preserveFileClipboard(false)) {
     bool hasContents = false;
     if (clipboard && clipboard->open(clipboard->getTime())) {
       for (const auto format : {IClipboard::Format::Text, IClipboard::Format::HTML, IClipboard::Format::Bitmap})
-        hasContents |= clipboard->has(format) && !clipboard->get(format).empty();
+        hasContents |= clipboard->has(format);
       clipboard->close();
     }
     if (deskflow::workspace::preserveFileClipboard(hasContents))
@@ -229,11 +224,6 @@ void Computer::setClipboard(ClipboardID id, const IClipboard *clipboard)
 
 void Computer::grabClipboard(ClipboardID id)
 {
-  if (deskflow::workspace::g_fileClipboardEnabled.load(std::memory_order_acquire)) {
-    const auto files = deskflow::workspace::nativeClipboardFiles();
-    if (files.available)
-      deskflow::workspace::g_fileClipboardActive.store(!files.paths.isEmpty(), std::memory_order_release);
-  }
   if (deskflow::workspace::preserveFileClipboard(false))
     return;
   m_computer->setClipboard(id, nullptr);
@@ -426,13 +416,17 @@ void *Computer::getEventTarget() const
 
 bool Computer::getClipboard(ClipboardID id, IClipboard *clipboard) const
 {
-  // A native file copy can reach this legacy callback before the Qt polling
-  // interval. Mark it now so a fast pointer transition cannot erase the source
-  // clipboard while the file manifest is being prepared on the main thread.
+  // Some applications expose a filename as text alongside the native file
+  // format. Do not race that path string against the actual file transfer.
   if (deskflow::workspace::g_fileClipboardEnabled.load(std::memory_order_acquire)) {
     const auto files = deskflow::workspace::nativeClipboardFiles();
-    if (files.available && !files.paths.isEmpty())
-      deskflow::workspace::g_fileClipboardActive.store(true, std::memory_order_release);
+    if (files.available && !files.paths.isEmpty()) {
+      if (!clipboard || !clipboard->open(0))
+        return false;
+      const bool empty = clipboard->empty();
+      clipboard->close();
+      return empty;
+    }
   }
   return m_computer->getClipboard(id, clipboard);
 }

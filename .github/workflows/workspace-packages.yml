@@ -7,6 +7,9 @@ on:
 permissions:
   contents: read
 
+env:
+  DESKFLOW_NATIVE_CLIPBOARD_TESTS: "1"
+
 jobs:
   macos-arm64:
     runs-on: macos-15

@@ -7,13 +7,15 @@
 #include <atomic>
 
 namespace deskflow::workspace {
-// The native input loop and Qt clipboard coordinator live on different
-// threads. A file clipboard has no representation in the legacy protocol;
-// an empty legacy update must not clear it during a pointer transition.
+// An unsupported file copy looks empty to the original text/image protocol.
+// Keep its ownership notifications from cancelling the independent file job,
+// including while the file bytes are still being downloaded.
 inline std::atomic_bool g_fileClipboardActive = false;
 inline std::atomic_bool g_fileClipboardEnabled = false;
 inline bool preserveFileClipboard(bool hasLegacyContents)
 {
-  return g_fileClipboardActive.load(std::memory_order_acquire) && !hasLegacyContents;
+  return (g_fileClipboardEnabled.load(std::memory_order_acquire) ||
+          g_fileClipboardActive.load(std::memory_order_acquire)) &&
+         !hasLegacyContents;
 }
 } // namespace deskflow::workspace

@@ -1422,6 +1422,14 @@ Enabling this setting will disable the server config GUI.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Updating clipboard</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Received; clipboard kept</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Transferring</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1741,6 +1749,18 @@ Enabling this setting will disable the server config GUI.</source>
 </context>
 <context>
     <name>deskflow::workspace::FileTransferService</name>
+    <message>
+        <source>Superseded by a newer file clipboard.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clipboard changed; received files remain available.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Files were received, but the clipboard is busy. Open their received location.</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message>
         <source>Wait for file transfers to finish before clearing the clipboard cache.</source>
         <translation type="unfinished"></translation>

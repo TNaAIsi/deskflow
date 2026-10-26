@@ -1424,6 +1424,14 @@ Enabling this setting will disable the server config GUI.</source>
         <translation>已完成</translation>
     </message>
     <message>
+        <source>Updating clipboard</source>
+        <translation>正在更新剪贴板</translation>
+    </message>
+    <message>
+        <source>Received; clipboard kept</source>
+        <translation>已接收，剪贴板未替换</translation>
+    </message>
+    <message>
         <source>Transferring</source>
         <translation>正在传输</translation>
     </message>
@@ -1755,6 +1763,18 @@ Enabling this setting will disable the server config GUI.</source>
 </context>
 <context>
     <name>deskflow::workspace::FileTransferService</name>
+    <message>
+        <source>Superseded by a newer file clipboard.</source>
+        <translation>已由更新的文件剪贴板取代。</translation>
+    </message>
+    <message>
+        <source>Clipboard changed; received files remain available.</source>
+        <translation>剪贴板已更改，收到的文件仍可取用。</translation>
+    </message>
+    <message>
+        <source>Files were received, but the clipboard is busy. Open their received location.</source>
+        <translation>文件已接收，但剪贴板正忙，请打开接收位置取用。</translation>
+    </message>
     <message>
         <source>Wait for file transfers to finish before clearing the clipboard cache.</source>
         <translation>请等待文件传输完成后再清理剪贴板缓存。</translation>

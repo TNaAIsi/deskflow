@@ -184,6 +184,12 @@ WorkspaceService::~WorkspaceService()
 void WorkspaceService::applyOptions()
 {
   setWorkspaceResponsive(m_options.value("enabled").toBool());
+  if (!m_options.value("enabled").toBool() || !m_options.value("fileClipboard").toBool()) {
+    const auto keys = m_pendingOffers.keys();
+    for (const auto &key : keys)
+      if (m_pendingOffers.value(key).toObject().value("offer").toObject().value("clipboard").toBool())
+        m_pendingOffers.remove(key);
+  }
   m_files->setClipboardEnabled(m_options.value("enabled").toBool() && m_options.value("fileClipboard").toBool());
   const auto autoMiB = std::clamp(m_options.value("automaticFileMiB").toInteger(), qint64(0), qint64(1024 * 1024));
   m_files->setAutomaticClipboardLimit(autoMiB == 0 ? std::numeric_limits<qint64>::max() : autoMiB * 1024 * 1024);

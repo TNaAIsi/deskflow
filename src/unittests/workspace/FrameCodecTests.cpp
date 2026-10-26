@@ -70,6 +70,15 @@ private Q_SLOTS:
     g_fileClipboardActive.store(false);
     QVERIFY(!preserveFileClipboard(false));
   }
+  void pendingFilesSurviveEmptyLegacyOwnershipUpdates()
+  {
+    g_fileClipboardActive.store(false);
+    g_fileClipboardEnabled.store(true);
+    QVERIFY(preserveFileClipboard(false));
+    QVERIFY(!preserveFileClipboard(true));
+    g_fileClipboardEnabled.store(false);
+    QVERIFY(!preserveFileClipboard(false));
+  }
 };
 QTEST_GUILESS_MAIN(FrameCodecTests)
 #include "FrameCodecTests.moc"

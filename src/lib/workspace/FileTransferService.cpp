@@ -306,6 +306,7 @@ struct Transfer
   qint64 lastProgress = 0;
   bool beginReceived = false;
   bool completeSent = false;
+  QStringList completedPaths;
 };
 
 void stop(const std::shared_ptr<Transfer> &transfer)
@@ -743,9 +744,15 @@ public:
               return;
             self->receiving.remove(transfer->key);
             self->send(transfer->peer, "files.received", {{"id", transfer->offer.id}});
+            transfer->completedPaths = paths;
             if (transfer->publishClipboard && self->clipboardEnabled &&
-                transfer->clipboardEpoch == self->clipboardEpoch && self->latestRemoteClipboard == transfer->key)
-              self->publishPaths(paths, transfer->offer.generation);
+                nativeClipboardRevision() != self->nativeRevision)
+              service->publishClipboardOffer();
+            if (transfer->publishClipboard && self->clipboardEnabled &&
+                transfer->clipboardEpoch == self->clipboardEpoch && self->latestRemoteClipboard == transfer->key) {
+              self->publishPaths(transfer, nativeClipboardRevision());
+              return;
+            }
             self->progress(transfer, "complete", transfer->offer.total, true, paths);
           });
           return;
@@ -757,27 +764,68 @@ public:
     });
   }
 
-  void publishPaths(const QStringList &paths, const QString &generation)
+  void finishPublication(std::shared_ptr<Transfer> transfer, bool published, const QString &message = {})
   {
-    if (!clipboard)
+    if (pendingPublication == transfer)
+      pendingPublication.reset();
+    progress(
+        transfer, published ? "complete" : "clipboardSkipped", transfer->offer.total, true, transfer->completedPaths,
+        message
+    );
+  }
+
+  void publishPaths(const std::shared_ptr<Transfer> &transfer, quint64 expectedRevision, int attempt = 0)
+  {
+    if (attempt == 0) {
+      if (pendingPublication && pendingPublication != transfer)
+        finishPublication(pendingPublication, false, FileTransferService::tr("Superseded by a newer file clipboard."));
+      pendingPublication = transfer;
+      progress(transfer, "publishing", transfer->offer.total, true, transfer->completedPaths);
+    }
+    if (pendingPublication != transfer || transfer->stopped.load())
       return;
+    if (!clipboardEnabled || transfer->clipboardEpoch != clipboardEpoch || latestRemoteClipboard != transfer->key ||
+        nativeClipboardRevision() != expectedRevision) {
+      q->publishClipboardOffer();
+      finishPublication(
+          transfer, false, FileTransferService::tr("Clipboard changed; received files remain available.")
+      );
+      return;
+    }
+    publishingClipboard = true;
+    bool published = false;
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+    published = publishNativeClipboardFiles(transfer->completedPaths, transfer->offer.generation, expectedRevision);
+#else
     auto mime = new QMimeData;
     QList<QUrl> urls;
-    for (const auto &path : paths)
+    for (const auto &path : transfer->completedPaths)
       urls.append(QUrl::fromLocalFile(path));
     mime->setUrls(urls);
-    mime->setData(kClipboardMarker, generation.toUtf8());
-#ifdef Q_OS_WIN
-    // Shell treats the offered files as a copy operation, never a move from
-    // Deskflow's cache. Qt supplies CF_HDROP for the local file URL list.
-    mime->setData("application/x-qt-windows-mime;value=\"Preferred DropEffect\"", QByteArray::fromHex("01000000"));
-#endif
-    publishingClipboard = true;
-    g_fileClipboardActive.store(true, std::memory_order_release);
+    mime->setData(kClipboardMarker, transfer->offer.generation.toUtf8());
     clipboard->setMimeData(mime);
-    nativeRevision = nativeClipboardRevision();
-    publishedRevision = nativeRevision;
+    published = true;
+#endif
     publishingClipboard = false;
+    if (published) {
+      g_fileClipboardActive.store(true, std::memory_order_release);
+      nativeRevision = nativeClipboardRevision();
+      publishedRevision = nativeRevision;
+      finishPublication(transfer, true);
+      return;
+    }
+    if (attempt < 40 && nativeClipboardRevision() == expectedRevision) {
+      const QPointer<FileTransferService> weak(q);
+      QTimer::singleShot(50, q, [weak, transfer, expectedRevision, attempt] {
+        if (weak)
+          weak->d->publishPaths(transfer, expectedRevision, attempt + 1);
+      });
+      return;
+    }
+    const auto reason =
+        FileTransferService::tr("Files were received, but the clipboard is busy. Open their received location.");
+    Q_EMIT q->error(reason);
+    finishPublication(transfer, false, reason);
   }
 
   void pump()
@@ -866,6 +914,7 @@ public:
   QHash<QString, Offer> remoteOffers;
   QHash<QString, std::shared_ptr<Transfer>> sending;
   QHash<QString, std::shared_ptr<Transfer>> receiving;
+  std::shared_ptr<Transfer> pendingPublication;
   QHash<QString, std::shared_ptr<std::atomic_bool>> scans;
   std::shared_ptr<std::atomic_bool> clipboardScan;
 };
@@ -890,8 +939,35 @@ void FileTransferService::setClipboardEnabled(bool enabled)
 {
   d->clipboardEnabled = enabled;
   g_fileClipboardEnabled.store(enabled, std::memory_order_release);
-  if (!enabled)
+  if (!enabled) {
     g_fileClipboardActive.store(false, std::memory_order_release);
+    ++d->clipboardEpoch;
+    if (d->clipboardScan)
+      d->clipboardScan->store(true);
+    if (!d->clipboardOffer.isEmpty())
+      d->localOffers.remove(d->clipboardOffer);
+    d->clipboardOffer.clear();
+    d->latestRemoteClipboard.clear();
+    for (const auto &key : d->sending.keys())
+      if (d->sending.value(key)->offer.clipboard)
+        d->fail(key, "Superseded by disabling file clipboard sharing");
+    for (const auto &key : d->receiving.keys())
+      if (d->receiving.value(key)->publishClipboard)
+        d->fail(key, "Superseded by disabling file clipboard sharing");
+    if (d->pendingPublication) {
+      const auto pending = d->pendingPublication;
+      stop(pending);
+      d->pendingPublication.reset();
+      d->progress(pending, "cancelled", pending->offer.total, true, pending->completedPaths);
+    }
+    for (auto it = d->controls.begin(); it != d->controls.end();) {
+      if (it->message.type == "files.offer" && it->message.metadata.value("clipboard").toBool()) {
+        d->controlBytes -= it->bytes;
+        it = d->controls.erase(it);
+      } else
+        ++it;
+    }
+  }
   if (!qobject_cast<QGuiApplication *>(QCoreApplication::instance()))
     return;
   if (!d->clipboard)
@@ -918,7 +994,7 @@ void FileTransferService::publishClipboardOffer(const QString &peer)
   QStringList paths;
   if (native.available) {
     d->nativeRevision = native.revision;
-    if (native.revision == d->publishedRevision) {
+    if ((!native.generation.isEmpty() && !native.paths.isEmpty()) || native.revision == d->publishedRevision) {
       g_fileClipboardActive.store(true, std::memory_order_release);
       return;
     }
@@ -1010,6 +1086,12 @@ void FileTransferService::requestOffer(const QString &peer, const QString &id, c
 
 void FileTransferService::cancel(const QString &id)
 {
+  if (d->pendingPublication && d->pendingPublication->offer.id == id) {
+    const auto transfer = d->pendingPublication;
+    stop(transfer);
+    d->pendingPublication.reset();
+    d->progress(transfer, "cancelled", transfer->offer.total, true, transfer->completedPaths);
+  }
   for (const auto &key : d->sending.keys()) {
     if (d->sending.value(key)->offer.id == id)
       d->fail(key, "Cancelled by user");
@@ -1022,7 +1104,7 @@ void FileTransferService::cancel(const QString &id)
 
 void FileTransferService::clearClipboardCache()
 {
-  if (!d->receiving.isEmpty() || !d->sending.isEmpty() || !d->scans.isEmpty()) {
+  if (!d->receiving.isEmpty() || !d->sending.isEmpty() || !d->scans.isEmpty() || d->pendingPublication) {
     Q_EMIT error(tr("Wait for file transfers to finish before clearing the clipboard cache."));
     return;
   }

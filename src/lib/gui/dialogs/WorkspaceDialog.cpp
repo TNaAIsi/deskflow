@@ -53,6 +53,10 @@ QString transferState(const QString &state)
 {
   if (state == "complete")
     return WorkspaceDialog::tr("Complete");
+  if (state == "publishing")
+    return WorkspaceDialog::tr("Updating clipboard");
+  if (state == "clipboardSkipped")
+    return WorkspaceDialog::tr("Received; clipboard kept");
   if (state == "transferring")
     return WorkspaceDialog::tr("Transferring");
   if (state == "requesting")
