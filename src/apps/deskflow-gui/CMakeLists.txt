@@ -24,6 +24,11 @@ elseif(BUILD_OSX_BUNDLE)
   set(BUNDLE_ICON_FILE ${target}.icns)
   set(BUNDLE_INFO_STRING "${CMAKE_PROJECT_DESCRIPTION}")
   set(BUNDLE_COPYRIGHT "${CMAKE_PROJECT_COPYRIGHT}")
+  set(BUNDLE_MIN_OS_VERSION_XML "")
+  if(CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(BUNDLE_MIN_OS_VERSION_XML
+      "<key>LSMinimumSystemVersion</key><string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string>")
+  endif()
 
   configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/../res/deskflow.plist.in

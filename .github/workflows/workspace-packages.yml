@@ -35,6 +35,8 @@ jobs:
         run: ctest --test-dir build/src/unittests --output-on-failure -E "^(MSWindowsClipboardTests|OSXKeyStateTests|OSXClipboardTests)$"
       - name: Package
         run: cpack --config build/CPackConfig.cmake -B build -D CPACK_DMG_DS_STORE_SETUP_SCRIPT=
+      - name: Verify deployed application
+        run: python3 deploy/verify-macos-bundle.py --find-in build/_CPack_Packages --output build/macos-bundle-validation.json
       - name: Include installation guide
         run: |
           cp docs/WorkspaceGuide.zh-CN.md build/使用说明.md
@@ -50,6 +52,7 @@ jobs:
             build/使用说明.md
             build/使用说明.html
             build/SHA256.txt
+            build/macos-bundle-validation.json
             build/validation/ui/*.png
             build/src/unittests/Testing/Temporary/LastTest.log
           if-no-files-found: warn

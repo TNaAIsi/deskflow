@@ -13,11 +13,12 @@ if (OSX_BUNDLE)
   if (APPLE_CODESIGN_DEV)
     set(_codesign_identity "${APPLE_CODESIGN_DEV}")
   endif()
-  install(CODE "execute_process(COMMAND
-    ${DEPLOYQT}
-    \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_PROJECT_PROPER_NAME}.app\"
-    -hardened-runtime -timestamp \"-codesign=${_codesign_identity}\"
-  )")
+  configure_file(
+    ${MY_DIR}/deploy-bundle.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/deploy-bundle.cmake
+    @ONLY
+  )
+  install(SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/deploy-bundle.cmake)
   set(CPACK_PACKAGE_ICON "${MY_DIR}/dmg-volume.icns")
   set(CPACK_DMG_BACKGROUND_IMAGE "${MY_DIR}/dmg-background.tiff")
   set(CPACK_DMG_DS_STORE_SETUP_SCRIPT "${MY_DIR}/generate_ds_store.applescript")

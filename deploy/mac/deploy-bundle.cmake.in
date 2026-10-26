@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: (C) 2026 Deskflow Developers
+# SPDX-License-Identifier: MIT
+
+set(_bundle "${CMAKE_INSTALL_PREFIX}/@CMAKE_PROJECT_PROPER_NAME@.app")
+set(_identity [==[@_codesign_identity@]==])
+set(_options)
+if(NOT _identity STREQUAL "-")
+  list(APPEND _options -hardened-runtime -timestamp)
+endif()
+execute_process(
+  COMMAND "@DEPLOYQT@" "${_bundle}" ${_options} "-codesign=${_identity}"
+  RESULT_VARIABLE _deployment_result
+)
+if(NOT _deployment_result EQUAL 0)
+  message(FATAL_ERROR "Qt bundle deployment failed: ${_deployment_result}")
+endif()
+
+if(_identity STREQUAL "-")
+  # A local signature has no Developer Team ID. Library validation would
+  # reject bundled Qt despite valid individual signatures.
+  foreach(_item "${_bundle}/Contents/MacOS/@CMAKE_PROJECT_NAME@-core" "${_bundle}")
+    execute_process(
+      COMMAND /usr/bin/codesign --force --sign - --options 0 "${_item}"
+      RESULT_VARIABLE _signing_result
+    )
+    if(NOT _signing_result EQUAL 0)
+      message(FATAL_ERROR "Local bundle signing failed: ${_signing_result}")
+    endif()
+  endforeach()
+endif()
+execute_process(
+  COMMAND /usr/bin/codesign --verify --deep --strict "${_bundle}"
+  RESULT_VARIABLE _verification_result
+)
+if(NOT _verification_result EQUAL 0)
+  message(FATAL_ERROR "Bundle signature verification failed: ${_verification_result}")
+endif()
+
+string(RANDOM LENGTH 16 ALPHABET 0123456789abcdef _profile_suffix)
+set(_profile "$ENV{TMPDIR}/deskflow-package-check-${_profile_suffix}")
+foreach(_program "@CMAKE_PROJECT_PROPER_NAME@" "@CMAKE_PROJECT_NAME@-core")
+  execute_process(
+    COMMAND "@CMAKE_COMMAND@" -E env
+      --unset=DYLD_LIBRARY_PATH --unset=DYLD_FRAMEWORK_PATH
+      --unset=DYLD_FALLBACK_LIBRARY_PATH --unset=DYLD_FALLBACK_FRAMEWORK_PATH
+      --unset=QT_PLUGIN_PATH --unset=QML2_IMPORT_PATH --unset=QT_QPA_PLATFORM_PLUGIN_PATH
+      "XDG_CONFIG_HOME=${_profile}/config" "XDG_STATE_HOME=${_profile}/state"
+      "${_bundle}/Contents/MacOS/${_program}" --version
+    RESULT_VARIABLE _runtime_result
+    OUTPUT_VARIABLE _runtime_output
+    ERROR_VARIABLE _runtime_error
+    TIMEOUT 20
+  )
+  if(NOT _runtime_result EQUAL 0)
+    file(REMOVE_RECURSE "${_profile}")
+    message(FATAL_ERROR "Packaged ${_program} cannot start: ${_runtime_result}\n${_runtime_error}")
+  endif()
+endforeach()
+file(REMOVE_RECURSE "${_profile}")
