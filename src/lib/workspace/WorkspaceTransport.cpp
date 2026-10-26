@@ -6,6 +6,7 @@
 #include "common/Settings.h"
 #include "net/FingerprintDatabase.h"
 
+#include <QDateTime>
 #include <QFile>
 #include <QHostAddress>
 #include <QJsonArray>
@@ -69,7 +70,12 @@ bool WorkspaceTransport::loadIdentity()
 
 bool WorkspaceTransport::isPinned(QSslSocket *socket) const
 {
-  if (socket->peerCertificate().isNull())
+  const auto certificate = socket->peerCertificate();
+  const auto now = QDateTime::currentDateTimeUtc();
+  // TLS backends differ in which validation failures they surface. Enforce the
+  // leaf's time interval ourselves before a pin can authorize any connection.
+  if (certificate.isNull() || !certificate.effectiveDate().isValid() || !certificate.expiryDate().isValid() ||
+      now < certificate.effectiveDate() || now > certificate.expiryDate())
     return false;
   FingerprintDatabase database;
   const auto path = m_server ? m_trustedClientsFile : m_trustedServersFile;
@@ -236,8 +242,10 @@ void WorkspaceTransport::prepareSocket(QSslSocket *socket, Channel channel)
       disconnected(socket);
   });
   connect(socket, &QSslSocket::sslErrors, this, [this, socket](const QList<QSslError> &errors) {
-    if (!isPinned(socket))
+    if (!isPinned(socket)) {
+      Q_EMIT error(tr("Workspace peer certificate is untrusted or outside its validity period."));
       return;
+    }
     for (const auto &error : errors) {
       const auto code = error.error();
       if (code != QSslError::SelfSignedCertificate && code != QSslError::SelfSignedCertificateInChain &&
@@ -250,6 +258,8 @@ void WorkspaceTransport::prepareSocket(QSslSocket *socket, Channel channel)
   });
   QTimer::singleShot(10000, socket, [this, socket] {
     if (m_links.contains(socket) && !m_links[socket].welcomed) {
+      if (!m_server && m_links[socket].channel == Channel::Control)
+        Q_EMIT error(tr("Workspace TLS handshake timed out."));
       socket->abort();
       if (m_links.contains(socket))
         disconnected(socket);

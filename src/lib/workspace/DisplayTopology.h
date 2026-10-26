@@ -14,6 +14,7 @@
 #include <QRect>
 #include <QSet>
 
+#include <atomic>
 #include <memory>
 
 class QScreen;
@@ -92,7 +93,13 @@ private:
   bool m_enabled = false;
   quint64 m_revision = 0;
   QJsonObject m_state;
+#if defined(__cpp_lib_atomic_shared_ptr) && __cpp_lib_atomic_shared_ptr >= 201711L
+  std::atomic<std::shared_ptr<const Snapshot>> m_snapshot;
+#else
+  // Some supported Apple libc++ versions predate atomic<shared_ptr>. The
+  // matching free atomic operations keep the same snapshot contract there.
   std::shared_ptr<const Snapshot> m_snapshot;
+#endif
 };
 
 } // namespace deskflow::workspace

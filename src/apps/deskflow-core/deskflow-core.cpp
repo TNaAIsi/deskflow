@@ -160,6 +160,13 @@ int main(int argc, char **argv)
           deskflow::workspace::g_fileClipboardActive.store(false);
       }
   );
+  QObject::connect(ipcServer, &deskflow::core::ipc::CoreIpcServer::workspacePeerDisconnected, &app, [&topology] {
+    auto layout = topology.layout();
+    layout.insert("enabled", false);
+    // A service-mode core may outlive its GUI. Fall back to the original
+    // computer layout while no user-session provider can refresh monitor data.
+    topology.setLayout(layout, true);
+  });
 
   QThread coreThread;
   QObject::connect(&coreThread, &QThread::finished, &app, &QApplication::quit);

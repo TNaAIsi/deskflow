@@ -1798,6 +1798,14 @@ Enabling this setting will disable the server config GUI.</source>
         <translation>工作台连接失败：%1</translation>
     </message>
     <message>
+        <source>Workspace peer certificate is untrusted or outside its validity period.</source>
+        <translation>工作台对端证书尚未信任，或已超出有效期。</translation>
+    </message>
+    <message>
+        <source>Workspace TLS handshake timed out.</source>
+        <translation>工作台加密连接握手超时。</translation>
+    </message>
+    <message>
         <source>Workspace peer certificate is not trusted by Deskflow.</source>
         <translation>对端证书尚未被 Deskflow 信任。</translation>
     </message>

@@ -391,6 +391,7 @@ void WorkspaceTransportTests::untrustedCertificateRejected()
   QVERIFY(server.start(true, QStringLiteral("server"), 0, {}, QStringLiteral("127.0.0.1")));
   QVERIFY(client.start(false, QStringLiteral("client"), server.listeningPort(), {QStringLiteral("127.0.0.1")}));
   QTRY_VERIFY_WITH_TIMEOUT(!errors.isEmpty(), 10000);
+  QTest::qWait(100);
   QCOMPARE(connected.size(), 0);
   QVERIFY(server.peers().isEmpty());
   QVERIFY(client.peers().isEmpty());
@@ -499,7 +500,8 @@ void WorkspaceTransportTests::expiredPinnedCertificateIsRejected()
   QSignalSpy errors(&client, &WorkspaceTransport::error);
   QVERIFY(server.start(true, QStringLiteral("server"), 0, {}, QStringLiteral("127.0.0.1")));
   QVERIFY(client.start(false, QStringLiteral("client"), server.listeningPort(), {QStringLiteral("127.0.0.1")}));
-  QTRY_VERIFY_WITH_TIMEOUT(!errors.isEmpty(), 10000);
+  QTRY_VERIFY_WITH_TIMEOUT(!errors.isEmpty(), 15000);
+  QTest::qWait(100);
   QCOMPARE(connected.size(), 0);
   QVERIFY(client.peers().isEmpty());
 }

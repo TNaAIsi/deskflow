@@ -1785,6 +1785,14 @@ Al habilitar esta opción, se deshabilitará la interfaz gráfica de usuario (GU
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Workspace peer certificate is untrusted or outside its validity period.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Workspace TLS handshake timed out.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Workspace peer certificate is not trusted by Deskflow.</source>
         <translation type="unfinished"></translation>
     </message>

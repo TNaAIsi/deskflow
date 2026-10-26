@@ -9,7 +9,7 @@
 #include "IpcServer.h"
 
 #include <QObject>
-#include <QSet>
+#include <QPointer>
 
 class QLocalSocket;
 
@@ -20,15 +20,20 @@ class CoreIpcServer : public IpcServer
   Q_OBJECT
 
 public:
-  explicit CoreIpcServer(QObject *parent);
+  explicit CoreIpcServer(QObject *parent, const QString &serverName = {});
+  ~CoreIpcServer() override;
 
   static CoreIpcServer &instance();
 
 Q_SIGNALS:
   void workspaceCommandReceived(const QString &encoded);
+  void workspacePeerDisconnected();
 
 private:
   void processCommand(QLocalSocket *clientSocket, const QString &command, const QStringList &parts) override;
+  void handleWorkspacePeerDisconnected();
+
+  QPointer<QLocalSocket> m_workspacePeer;
 };
 
 } // namespace deskflow::core::ipc

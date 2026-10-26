@@ -96,6 +96,24 @@ jobs:
         run: ctest --test-dir build/src/unittests --output-on-failure -E "^(MSWindowsClipboardTests|OSXKeyStateTests|OSXClipboardTests)$"
       - name: Build installers
         run: cmake --build build --target package --parallel 4
+      - name: Verify MSI install and uninstall
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem build/deskflow-*.msi | Select-Object -First 1
+          if (-not $msi) { throw 'MSI installer is missing' }
+          $installLog = Join-Path $env:RUNNER_TEMP 'deskflow-install.log'
+          $install = Start-Process msiexec.exe -ArgumentList @('/i', ('"' + $msi.FullName + '"'), '/qn', '/norestart', '/L*v', ('"' + $installLog + '"')) -Wait -PassThru
+          if ($install.ExitCode -notin @(0, 3010)) { Get-Content $installLog -Tail 100; throw "MSI installation failed: $($install.ExitCode)" }
+          $core = Join-Path $env:ProgramFiles 'Deskflow/deskflow-core.exe'
+          if (-not (Test-Path $core)) { throw 'Installed core executable is missing' }
+          & $core --version | Out-File -Encoding utf8 build/installed-version.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Installed executable failed to start' }
+          $gui = Join-Path $env:ProgramFiles 'Deskflow/deskflow.exe'
+          & $gui --version | Out-File -Append -Encoding utf8 build/installed-version.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Installed GUI dependencies failed to load' }
+          if ((Get-Content build/installed-version.txt -Raw) -notmatch '1\.28\.0') { throw 'Installed version is incorrect' }
+          $uninstall = Start-Process msiexec.exe -ArgumentList @('/x', ('"' + $msi.FullName + '"'), '/qn', '/norestart') -Wait -PassThru
+          if ($uninstall.ExitCode -notin @(0, 3010)) { throw "MSI uninstall failed: $($uninstall.ExitCode)" }
       - name: Include installation guide
         shell: pwsh
         run: |
@@ -113,5 +131,6 @@ jobs:
             build/使用说明.md
             build/使用说明.html
             build/SHA256.txt
+            build/installed-version.txt
             build/src/unittests/Testing/Temporary/LastTest.log
           if-no-files-found: warn

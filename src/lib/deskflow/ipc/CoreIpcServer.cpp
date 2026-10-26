@@ -15,10 +15,17 @@ namespace deskflow::core::ipc {
 
 static CoreIpcServer *s_instance = nullptr;
 
-CoreIpcServer::CoreIpcServer(QObject *parent) : IpcServer(parent, kCoreIpcName, QStringLiteral("core"))
+CoreIpcServer::CoreIpcServer(QObject *parent, const QString &serverName)
+    : IpcServer(parent, serverName.isEmpty() ? QString::fromLatin1(kCoreIpcName) : serverName, QStringLiteral("core"))
 {
   assert(s_instance == nullptr);
   s_instance = this;
+}
+
+CoreIpcServer::~CoreIpcServer()
+{
+  assert(s_instance == this);
+  s_instance = nullptr;
 }
 
 CoreIpcServer &CoreIpcServer::instance()
@@ -35,6 +42,11 @@ void CoreIpcServer::processCommand(QLocalSocket *clientSocket, const QString &co
       writeToClientSocket(clientSocket, QStringLiteral("error=unauthorized workspace command"));
       return;
     }
+    m_workspacePeer = clientSocket;
+    connect(
+        clientSocket, &QLocalSocket::disconnected, this, &CoreIpcServer::handleWorkspacePeerDisconnected,
+        Qt::UniqueConnection
+    );
     Q_EMIT workspaceCommandReceived(parts.at(1));
     return;
   }
@@ -46,6 +58,16 @@ void CoreIpcServer::processCommand(QLocalSocket *clientSocket, const QString &co
     return;
   }
   LOG_WARN("core ipc server got unknown command: %s", command.toUtf8().constData());
+}
+
+void CoreIpcServer::handleWorkspacePeerDisconnected()
+{
+  if (m_workspacePeer != qobject_cast<QLocalSocket *>(sender())) {
+    return;
+  }
+
+  m_workspacePeer.clear();
+  Q_EMIT workspacePeerDisconnected();
 }
 
 } // namespace deskflow::core::ipc

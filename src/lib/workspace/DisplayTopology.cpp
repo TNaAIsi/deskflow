@@ -309,7 +309,7 @@ void DisplayTopology::setPeerDisplays(const QString &peer, const QJsonArray &dis
 
 void DisplayTopology::removePeer(const QString &peer)
 {
-  if (m_peerDisplays.remove(peer) > 0)
+  if (m_peerDisplays.remove(peer))
     publish();
 }
 

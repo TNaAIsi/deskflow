@@ -1786,6 +1786,14 @@ Enabling this setting will disable the server config GUI.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Workspace peer certificate is untrusted or outside its validity period.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Workspace TLS handshake timed out.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Workspace peer certificate is not trusted by Deskflow.</source>
         <translation type="unfinished"></translation>
     </message>

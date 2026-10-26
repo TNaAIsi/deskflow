@@ -8,8 +8,10 @@
 #ifndef Q_OS_MACOS
 #ifdef Q_OS_WIN
 #define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+
+// ShellAPI requires the Win32 SDK declarations above.
 #include <shellapi.h>
-#include <windows.h>
 #endif
 
 namespace deskflow::workspace {
