@@ -116,8 +116,10 @@ function Get-DeskflowService {
 
 function Assert-RunningService([string]$Step) {
     $controller = Get-Service -Name $ServiceName
-    $controller.WaitForStatus([ServiceProcess.ServiceControllerStatus]::Running,
-        [TimeSpan]::FromSeconds($TimeoutSeconds))
+    try {
+        $controller.WaitForStatus([ServiceProcess.ServiceControllerStatus]::Running,
+            [TimeSpan]::FromSeconds($TimeoutSeconds))
+    } finally { $controller.Dispose() }
     $service = Get-DeskflowService
     $expectedDaemon = Join-Path $installedRoot 'deskflow-daemon.exe'
     if ($service.State -ne 'Running' -or $service.ProcessId -eq 0) {
@@ -148,6 +150,20 @@ function Assert-RunningService([string]$Step) {
     return $service.ProcessId
 }
 
+function Invoke-DeskflowServiceAction([ValidateSet('Stop', 'Start', 'Restart')][string]$Action) {
+    # Dispose every SCM handle before the next MSI operation. A surviving
+    # ServiceController can leave an uninstalled service marked for deletion.
+    $controller = Get-Service -Name $ServiceName
+    try {
+        if ($Action -in @('Stop', 'Restart')) {
+            $controller.Stop()
+            $controller.WaitForStatus([ServiceProcess.ServiceControllerStatus]::Stopped,
+                [TimeSpan]::FromSeconds($TimeoutSeconds))
+        }
+        if ($Action -in @('Start', 'Restart')) { $controller.Start() }
+    } finally { $controller.Dispose() }
+}
+
 try {
     foreach ($name in @('deskflow.exe', 'deskflow-core.exe', 'deskflow-daemon.exe')) {
         $report.executables += Invoke-CleanVersion $installedRoot $name $true
@@ -166,14 +182,11 @@ try {
             throw 'Service lifecycle tests require a disposable GitHub runner or DESKFLOW_ALLOW_SERVICE_TESTS=1.'
         }
         $null = Assert-RunningService 'after MSI installation'
-        Stop-Service -Name $ServiceName
-        $controller = Get-Service -Name $ServiceName
-        $controller.WaitForStatus([ServiceProcess.ServiceControllerStatus]::Stopped,
-            [TimeSpan]::FromSeconds($TimeoutSeconds))
+        Invoke-DeskflowServiceAction 'Stop'
         $report.service_checks += [ordered]@{ step = 'stop'; state = 'Stopped' }
-        Start-Service -Name $ServiceName
+        Invoke-DeskflowServiceAction 'Start'
         $null = Assert-RunningService 'start after stop'
-        Restart-Service -Name $ServiceName
+        Invoke-DeskflowServiceAction 'Restart'
         $serviceProcessId = Assert-RunningService 'restart'
         # Catch a daemon that briefly reports RUNNING then crashes or is silently
         # respawned by the service recovery configuration.

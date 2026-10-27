@@ -242,7 +242,9 @@ try {
         [version]$report.candidate.version -le [version]$report.baseline.version) {
         throw 'Expected a newer candidate with the same UpgradeCode and a distinct ProductCode.'
     }
-    if (Get-Service -Name 'Deskflow' -ErrorAction SilentlyContinue) {
+    $existingService = Get-Service -Name 'Deskflow' -ErrorAction SilentlyContinue
+    if ($existingService) {
+        $existingService.Dispose()
         throw 'Upgrade fixture requires a clean runner with no existing Deskflow service.'
     }
     Invoke-Msi 'baseline' '/i' $baselinePath
