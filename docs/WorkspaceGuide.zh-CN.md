@@ -14,7 +14,9 @@
 
 音频、文件与显示器协商在登录用户的 Deskflow 主程序中运行，兼容 Windows 键鼠服务的提升权限。主窗口可以关闭并留在托盘，工作台继续运行；从托盘完全退出 Deskflow 会停止工作台连接。
 
-安装包未使用商业开发者证书签名或 Apple 公证。Mac 如阻止首次打开，可通过“系统设置 → 隐私与安全性”打开已确认来源的应用。Windows 如果提示缺少 Microsoft Visual C++ 运行库，安装[微软官方 Visual C++ v14 x64 Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) 后再运行 MSI。
+Windows MSI 和免安装版均自带与构建工具匹配的 Visual C++ 运行库，无需预先安装其他版本的运行库。覆盖升级时保留原有配置，并兼容旧屏幕配置中缺失的可选字段。若安装窗口正在显示“Service Deskflow failed to start”，先取消并等待回滚结束，再安装本次提供的 1.28.1 或更新版本；不要在安装仍进行时同时运行另一个安装包。
+
+安装包未使用商业开发者证书签名或 Apple 公证。Mac 如阻止首次打开，可通过“系统设置 → 隐私与安全性”打开已确认来源的应用。Windows 免安装版没有系统服务，因此不能在 UAC 提示或登录界面接管输入；日常使用建议安装 MSI 版本。
 
 ## Mac 键盘与中英文切换
 

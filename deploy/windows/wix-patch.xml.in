@@ -29,17 +29,6 @@
   </CPackWiXFragment>
 
   <CPackWiXFragment Id="#PRODUCT">
-    <Property Id="VC_REDIST_INSTALLED">
-      <RegistrySearch
-        Id="FindVCRedist"
-        Root="HKLM"
-        Key="SOFTWARE\Microsoft\VisualStudio\@REQUIRED_MSVC_RUNTIME_MAJOR@.0\VC\Runtimes\@BUILD_ARCHITECTURE@"
-        Name="Installed"
-        Type="raw" />
-    </Property>
-
-    <Binary Id="CustomDLL" SourceFile="@CMAKE_CURRENT_BINARY_DIR@/wix-custom.dll" />
-
     <!--
       Close any running Deskflow processes before file replacement so the
       installer does not have to schedule files for replace-on-reboot.
@@ -82,32 +71,11 @@
        <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Run Deskflow when finished" />
     </UI>
     <CustomAction
-      Id="CheckVCRedist"
-      BinaryRef="CustomDLL"
-      DllEntry="CheckVCRedist"
-      Execute="immediate" />
-
-    <CustomAction
-      Id="ShowVCRedistError"
-      Error="Microsoft Visual C++ Redistributable v@REQUIRED_MSVC_RUNTIME_MAJOR@.@REQUIRED_MSVC_RUNTIME_MINOR@ or later is required. Please download and install the latest version and then restart the installation. See our documentation for instructions." />
-
-    <CustomAction
       Id="RunDeskflow"
-      ExeCommand="[INSTALL_ROOT]deskflow.exe"
+      ExeCommand="&quot;[INSTALL_ROOT]deskflow.exe&quot;"
       Directory="INSTALL_ROOT"
       Execute="immediate"
       Impersonate="yes"
       Return="asyncNoWait" />
-
-    <InstallExecuteSequence>
-      <Custom
-        Action="CheckVCRedist"
-        Before="InstallInitialize"
-        Condition="NOT Installed AND VC_REDIST_INSTALLED" />
-      <Custom
-        Action="ShowVCRedistError"
-        Before="InstallInitialize"
-        Condition="NOT Installed AND (NOT VC_REDIST_INSTALLED OR NOT VC_REDIST_VERSION_OK)" />
-    </InstallExecuteSequence>
   </CPackWiXFragment>
 </CPackWiXPatch>

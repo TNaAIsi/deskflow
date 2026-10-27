@@ -117,7 +117,8 @@ void Settings::upgradeSettings()
   for (const auto &key : screenKeys) {
     auto newKey = key;
     newKey.replace("screen_", "computer_");
-    m_settings->setValue(newKey, m_settings->value(key));
+    if (!m_settings->contains(newKey))
+      m_settings->setValue(newKey, m_settings->value(key));
   }
   for (const auto [oldKey, newKey] : m_upgradedMap.asKeyValueRange()) {
     if (m_settings->contains(newKey) || !m_settings->contains(oldKey))
@@ -131,21 +132,22 @@ void Settings::upgradeSettings()
     }
   }
 
-  // move to computers
-
-  m_settings->beginGroup("internalConfig");
-  const int screenArraySize = m_settings->beginReadArray("screens");
-  m_settings->endArray();
+  // Qt serializes setArrayIndex(0) as the group "1". Read the stored
+  // numeric groups themselves so the first computer is not skipped, and old
+  // offset arrays or a stale size do not hide otherwise valid computers.
+  m_settings->beginGroup("internalConfig/screens");
+  const auto screenGroups = m_settings->childGroups();
   m_settings->endGroup();
 
-  for (int i = 1; i <= screenArraySize; i++) {
-    m_settings->beginGroup("internalConfig");
-    m_settings->beginReadArray("screens");
-    m_settings->setArrayIndex(i);
+  for (const auto &screenGroup : screenGroups) {
+    bool numeric = false;
+    const auto index = screenGroup.toInt(&numeric);
+    if (!numeric || index < 0)
+      continue;
+    m_settings->beginGroup(QStringLiteral("internalConfig/screens/%1").arg(screenGroup));
     const auto name = m_settings->value("name", {}).toString();
 
     if (name.isEmpty()) {
-      m_settings->endArray();
       m_settings->endGroup();
       continue;
     }
@@ -154,35 +156,37 @@ void Settings::upgradeSettings()
     if (m_settings->contains("switchCornerSize"))
       switchCornerSize = m_settings->value("switchCornerSize", 0).toInt();
 
-    QList<bool> fixTemp;
+    QList<bool> fixTemp(4, false);
     if (m_settings->contains("fixArray/size")) {
-      int fixArraySize = m_settings->beginReadArray("fixArray");
-      for (int j = 0; j < fixArraySize; j++) {
+      const int fixArraySize = m_settings->beginReadArray("fixArray");
+      for (int j = 0; j < qMin(fixArraySize, 4); j++) {
         m_settings->setArrayIndex(j);
-        fixTemp.append(m_settings->value("fix").toBool());
+        fixTemp[j] = m_settings->value("fix", false).toBool();
       }
       m_settings->endArray();
     }
 
-    QList<bool> cornerTemp;
+    QList<bool> cornerTemp(4, false);
     if (m_settings->contains("switchCornerArray/size")) {
-      int cornerArraySize = m_settings->beginReadArray("switchCornerArray");
-      for (int j = 0; j < cornerArraySize; j++) {
+      const int cornerArraySize = m_settings->beginReadArray("switchCornerArray");
+      for (int j = 0; j < qMin(cornerArraySize, 4); j++) {
         m_settings->setArrayIndex(j);
-        cornerTemp.append(m_settings->value("switchCorner").toBool());
+        cornerTemp[j] = m_settings->value("switchCorner", false).toBool();
       }
       m_settings->endArray();
     }
 
     QList<QString> modifierTemp;
+    for (int j = 0; j < 6; j++)
+      modifierTemp.append(valueToKeyboardModifierOption(j));
     if (m_settings->contains("modifierArray/size")) {
-      int modifierArraySize = m_settings->beginReadArray("modifierArray");
-      for (int j = 0; j < modifierArraySize; j++) {
+      const int modifierArraySize = m_settings->beginReadArray("modifierArray");
+      for (int j = 0; j < qMin(modifierArraySize, 6); j++) {
         m_settings->setArrayIndex(j);
-        auto modifier = m_settings->value("modifier").toInt();
-        modifierTemp.append(
-            modifier == -1 ? valueToKeyboardModifierOption(j) : valueToKeyboardModifierOption(modifier)
-        );
+        bool valid = false;
+        const auto modifier = m_settings->value("modifier", -1).toInt(&valid);
+        if (valid && modifier >= 0 && modifier <= static_cast<int>(KeyboardModifier::None))
+          modifierTemp[j] = valueToKeyboardModifierOption(modifier);
       }
       m_settings->endArray();
     }
@@ -197,7 +201,6 @@ void Settings::upgradeSettings()
       m_settings->endArray();
       aliases.removeDuplicates();
     }
-    m_settings->endArray();
     m_settings->endGroup();
 
     // Write Settings

@@ -11,6 +11,12 @@ on:
       - "v*"
   pull_request:
   workflow_dispatch:
+    inputs:
+      windows_baseline_run:
+        description: Optional successful installer run to test Windows upgrades from
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -26,8 +32,11 @@ jobs:
   workspace-packages:
     if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/workspace-packages.yml
+    with:
+      windows-baseline-run: ${{ inputs.windows_baseline_run || '' }}
     permissions:
       contents: read
+      actions: read
 
   # Quality gate to allow PR merge, used in the branch protection rules.
   ci-passed:

@@ -92,6 +92,9 @@ public:
   //! Prevent hard to troubleshoot errors, e.g. access violations.
   static void guardRuntimeVersion();
 
+  //! Report startup failures without displaying an inaccessible dialog in service session zero.
+  static void reportStartupError(const char *message, const char *title = "Fatal Error");
+
   //! Gets the window instance saved at program start.
   /*!
   e.g. Used by `GetModuleFileName` which is used when installing the daemon.

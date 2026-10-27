@@ -40,6 +40,7 @@ int main(int argc, char **argv)
 #endif
 
   QCoreApplication::setApplicationName(QStringLiteral("%1 Daemon").arg(kAppName));
+  QCoreApplication::setApplicationVersion(kVersion);
   QCoreApplication app(argc, argv);
 
   Arch arch;
@@ -130,7 +131,6 @@ void handleError(const char *message)
   LOG_ERR("%s", message);
 
 #if defined(Q_OS_WIN)
-  // Show a message box for when run from MSI in Win32 subsystem.
-  MessageBoxA(nullptr, message, "Deskflow daemon error", MB_OK | MB_ICONERROR);
+  ArchMiscWindows::reportStartupError(message, "Deskflow daemon error");
 #endif
 }

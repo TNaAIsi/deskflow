@@ -25,6 +25,9 @@ private Q_SLOTS:
   void checkCleanComputerName();
   void checkCleanComputerName_LongName();
   void checkClearState();
+  void upgradeLegacyComputers_data();
+  void upgradeLegacyComputers();
+  void upgradePreservesCurrentPreferencesAndIsIdempotent();
 
 private:
   inline static const QString m_settingsPathTemp = QStringLiteral("tmp/test");

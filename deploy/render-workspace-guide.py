@@ -103,7 +103,7 @@ footer{margin-top:38px;border-top:1px solid var(--line);padding-top:16px}
 @media(max-width:640px){main{padding:24px 20px}h1{font-size:28px}nav{display:block}nav a{display:block;margin:6px 0}}
 @media print{body,main{background:white;color:black}main{padding:0;max-width:none}nav{display:none}details{display:none}h2{break-after:avoid}}
 </style><main><h1>Deskflow 共享工作台</h1>
-<p class="meta">1.28.0 Workspace · 安装与功能说明</p>
+<p class="meta">1.28.1 Workspace · 安装与功能说明</p>
 <div class="badges"><span>Mac 输入源切换</span><span>全屏防误切</span><span>系统声音</span><span>文件复制</span><span>独立显示器</span></div>
 """
     result += "<nav>" + "".join(navigation) + "</nav>" + gallery + "\n".join(body)

@@ -15,9 +15,11 @@
 
 #include <Psapi.h>
 
+#include <QString>
+
 #include <algorithm>
 #include <array>
-#include <filesystem>
+#include <cstdlib>
 #include <stdexcept>
 
 // Useful for debugging Windows specific bootstrapping code before the logging system is initialized.
@@ -29,22 +31,38 @@
 // Free functions
 //
 
-void errorMessageBox(const char *message, const char *title = "Fatal Error");
-
 std::string getBinaryName()
 {
-  std::array<char, MAX_PATH> buffer;
-  if (!GetModuleFileNameA(nullptr, buffer.data(), MAX_PATH)) {
-    errorMessageBox("Failed to get binary name.");
-    abort();
+  std::array<wchar_t, 32768> buffer{};
+  const auto length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+  if (length == 0 || length >= buffer.size()) {
+    ArchMiscWindows::reportStartupError("Failed to get binary name.");
+    exit(EXIT_FAILURE);
   }
 
-  return std::filesystem::path(buffer.data()).filename().string();
+  const auto path = QString::fromWCharArray(buffer.data(), static_cast<int>(length));
+  return path.mid(path.lastIndexOf(QLatin1Char('\\')) + 1).toUtf8().toStdString();
 }
 
-void errorMessageBox(const char *message, const char *title)
+void ArchMiscWindows::reportStartupError(const char *message, const char *title)
 {
-  MessageBoxA(nullptr, message, title, MB_ICONERROR | MB_OK);
+  const auto wideMessage = QString::fromUtf8(message).toStdWString();
+  const auto wideTitle = QString::fromUtf8(title).toStdWString();
+  OutputDebugStringW((wideTitle + L": " + wideMessage + L"\n").c_str());
+
+  DWORD sessionId = 0;
+  if (!ProcessIdToSessionId(GetCurrentProcessId(), &sessionId) || sessionId == 0) {
+    // A modal dialog in session zero cannot be acknowledged by the installing
+    // user. It instead leaves SCM waiting until service startup times out.
+    if (const auto source = RegisterEventSourceW(nullptr, L"Deskflow"); source != nullptr) {
+      const wchar_t *strings[] = {wideMessage.c_str()};
+      ReportEventW(source, EVENTLOG_ERROR_TYPE, 0, 1, nullptr, 1, 0, strings, nullptr);
+      DeregisterEventSource(source);
+    }
+    return;
+  }
+
+  MessageBoxW(nullptr, wideMessage.c_str(), wideTitle.c_str(), MB_ICONERROR | MB_OK);
 }
 
 // Used by bootstrap logging to differentiate between daemon and client/server messages.
@@ -406,8 +424,8 @@ HMODULE ArchMiscWindows::findLoadedModule(std::array<const char *, 2> moduleName
 
   HANDLE hProcess = GetCurrentProcess();
   if (!EnumProcessModules(hProcess, hModules.data(), sizeof(hModules), &cbNeeded)) {
-    errorMessageBox("Failed to enumerate process modules.");
-    abort();
+    reportStartupError("Failed to enumerate process modules.");
+    exit(EXIT_FAILURE);
   }
 
   const auto moduleCount = std::min<size_t>(cbNeeded / sizeof(HMODULE), hModules.size());
@@ -447,43 +465,44 @@ void ArchMiscWindows::guardRuntimeVersion() // NOSONAR - `noreturn` is not avail
 {
   auto hModule = findLoadedModule({"vcruntime140.dll", "vcruntime140d.dll"});
   if (hModule == nullptr) {
-    errorMessageBox("Failed to find MSVC runtime DLL.");
-    abort();
+    reportStartupError("Failed to find MSVC runtime DLL.");
+    exit(EXIT_FAILURE);
   }
 
   MS_LOG_DEBUG("found msvc runtime dll, handle: %p", hModule);
 
-  std::array<char, MAX_PATH> pathBuffer;
+  std::array<wchar_t, 32768> pathBuffer{};
   const auto path = pathBuffer.data();
-  if (!GetModuleFileNameA(hModule, path, MAX_PATH)) {
-    errorMessageBox("Failed to get path of MSVC runtime.");
-    abort();
+  const auto pathLength = GetModuleFileNameW(hModule, path, static_cast<DWORD>(pathBuffer.size()));
+  if (pathLength == 0 || pathLength >= pathBuffer.size()) {
+    reportStartupError("Failed to get path of MSVC runtime.");
+    exit(EXIT_FAILURE);
   }
 
-  MS_LOG_DEBUG("msvc runtime dll path: %s", path);
+  MS_LOG_DEBUG("msvc runtime dll path: %s", qPrintable(QString::fromWCharArray(path)));
 
   DWORD handle;
-  DWORD size = GetFileVersionInfoSizeA(path, &handle);
+  DWORD size = GetFileVersionInfoSizeW(path, &handle);
   if (size <= 0) {
-    errorMessageBox("Failed to get version info size for MSVC runtime.");
-    abort();
+    reportStartupError("Failed to get version info size for MSVC runtime.");
+    exit(EXIT_FAILURE);
   }
 
   MS_LOG_DEBUG("msvc runtime dll version info size: %d", size);
 
   std::vector<BYTE> versionInfo(size);
-  if (!GetFileVersionInfoA(path, handle, size, versionInfo.data())) {
-    errorMessageBox("Failed to get file version info for MSVC runtime.");
-    abort();
+  if (!GetFileVersionInfoW(path, handle, size, versionInfo.data())) {
+    reportStartupError("Failed to get file version info for MSVC runtime.");
+    exit(EXIT_FAILURE);
   }
 
   MS_LOG_DEBUG("msvc runtime dll version info ok, querying values");
 
   VS_FIXEDFILEINFO *fileInfo = nullptr;
   const auto lplpFileInfo = reinterpret_cast<void **>(&fileInfo); // NOSONAR - Idiomatic Win32
-  if (UINT len = 0; !VerQueryValueA(versionInfo.data(), "\\", lplpFileInfo, &len)) {
-    errorMessageBox("Failed to query file version info for MSVC runtime.");
-    abort();
+  if (UINT len = 0; !VerQueryValueW(versionInfo.data(), L"\\", lplpFileInfo, &len)) {
+    reportStartupError("Failed to query file version info for MSVC runtime.");
+    exit(EXIT_FAILURE);
   }
 
   const auto currentMajor = HIWORD(fileInfo->dwFileVersionMS);
@@ -492,15 +511,16 @@ void ArchMiscWindows::guardRuntimeVersion() // NOSONAR - `noreturn` is not avail
 
   MS_LOG_DEBUG("msvc runtime dll version: %d.%d.%d", currentMajor, currentMinor, currentBuild);
 
-  if (currentMajor < kWindowsRuntimeMajor || currentMinor < kWindowsRuntimeMinor) {
+  if (currentMajor < kWindowsRuntimeMajor ||
+      (currentMajor == kWindowsRuntimeMajor && currentMinor < kWindowsRuntimeMinor)) {
     const auto message = deskflow::string::sprintf(
         "Installed Microsoft Visual C++ Runtime v%d.%d.%d is outdated.\n\n"
         "Minimum required version: v%d.%d\n\n"
         "Please update to the latest Microsoft Visual C++ Redistributable.",
         currentMajor, currentMinor, currentBuild, kWindowsRuntimeMajor, kWindowsRuntimeMinor
     );
-    MessageBoxA(nullptr, message.c_str(), "Dependency Error", MB_ICONERROR | MB_OK);
-    exit(1);
+    reportStartupError(message.c_str(), "Dependency Error");
+    exit(EXIT_FAILURE);
   }
 }
 

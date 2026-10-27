@@ -61,8 +61,11 @@ int ArchDaemonWindows::daemonize(DaemonFunc const &func)
   m_daemonFunc = func;
 
   // construct the service entry
+  // The dispatcher may retain this string for the lifetime of the service.
+  // A pointer into a temporary std::wstring is already dangling before the call.
+  auto serviceName = QString(kAppName).toStdWString();
   SERVICE_TABLE_ENTRY entry[2];
-  entry[0].lpServiceName = const_cast<wchar_t *>(QString(kAppName).toStdWString().c_str());
+  entry[0].lpServiceName = serviceName.data();
   entry[0].lpServiceProc = &ArchDaemonWindows::serviceMainEntry;
   entry[1].lpServiceName = nullptr;
   entry[1].lpServiceProc = nullptr;
@@ -177,9 +180,11 @@ void ArchDaemonWindows::setStatus(DWORD state, DWORD step, DWORD waitHint)
   LOG_DEBUG("setting service status: state=%d, step=%d, waitHint=%d", state, step, waitHint);
 
   SERVICE_STATUS status;
-  status.dwServiceType = SERVICE_WIN32_OWN_PROCESS | SERVICE_INTERACTIVE_PROCESS;
+  status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
   status.dwCurrentState = state;
-  status.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_PAUSE_CONTINUE | SERVICE_ACCEPT_SHUTDOWN;
+  status.dwControlsAccepted = state == SERVICE_START_PENDING || state == SERVICE_STOPPED
+                                  ? 0
+                                  : SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_PAUSE_CONTINUE | SERVICE_ACCEPT_SHUTDOWN;
   status.dwWin32ExitCode = NO_ERROR;
   status.dwServiceSpecificExitCode = 0;
   status.dwCheckPoint = step;
@@ -192,9 +197,9 @@ void ArchDaemonWindows::setStatusError(DWORD error)
   assert(s_daemon != nullptr);
 
   SERVICE_STATUS status;
-  status.dwServiceType = SERVICE_WIN32_OWN_PROCESS | SERVICE_INTERACTIVE_PROCESS;
+  status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
   status.dwCurrentState = SERVICE_STOPPED;
-  status.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_PAUSE_CONTINUE | SERVICE_ACCEPT_SHUTDOWN;
+  status.dwControlsAccepted = 0;
   status.dwWin32ExitCode = ERROR_SERVICE_SPECIFIC_ERROR;
   status.dwServiceSpecificExitCode = error;
   status.dwCheckPoint = 0;

@@ -2,10 +2,22 @@ name: Workspace installers
 
 on:
   workflow_dispatch:
+    inputs:
+      windows-baseline-run:
+        description: Optional successful installer run to test Windows upgrades from
+        required: false
+        default: ''
+        type: string
   workflow_call:
+    inputs:
+      windows-baseline-run:
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 env:
   DESKFLOW_NATIVE_CLIPBOARD_TESTS: "1"
@@ -26,8 +38,8 @@ jobs:
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           -DBUILD_TESTS=ON -DSKIP_BUILD_TESTS=ON
-          "-DDESKFLOW_VERSION_OVERRIDE=1.28.0"
-          "-DPACKAGE_VERSION_LABEL=1.28.0-workspace"
+          "-DDESKFLOW_VERSION_OVERRIDE=1.28.1"
+          "-DPACKAGE_VERSION_LABEL=1.28.1-workspace"
           -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
       - name: Compile
         run: cmake --build build --parallel 4
@@ -80,8 +92,8 @@ jobs:
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           -DBUILD_TESTS=ON -DSKIP_BUILD_TESTS=ON
-          "-DDESKFLOW_VERSION_OVERRIDE=1.28.0"
-          "-DPACKAGE_VERSION_LABEL=1.28.0-workspace"
+          "-DDESKFLOW_VERSION_OVERRIDE=1.28.1"
+          "-DPACKAGE_VERSION_LABEL=1.28.1-workspace"
           ${{ steps.deps.outputs.vcpkg-cmake-config }}
       - name: Compile
         run: cmake --build build --parallel 4
@@ -102,24 +114,36 @@ jobs:
         run: ctest --test-dir build/src/unittests --output-on-failure -E "^(MSWindowsClipboardTests|OSXKeyStateTests|OSXClipboardTests)$"
       - name: Build installers
         run: cmake --build build --target package --parallel 4
+      - name: Download previous installer for upgrade regression
+        if: inputs.windows-baseline-run != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: deskflow-workspace-windows-x64
+          path: build/upgrade-baseline
+          run-id: ${{ inputs.windows-baseline-run }}
+          github-token: ${{ github.token }}
       - name: Verify MSI install and uninstall
         shell: pwsh
         run: |
           $msi = Get-ChildItem build/deskflow-*.msi | Select-Object -First 1
           if (-not $msi) { throw 'MSI installer is missing' }
-          $installLog = Join-Path $env:RUNNER_TEMP 'deskflow-install.log'
+          $installLog = Join-Path $env:GITHUB_WORKSPACE 'build/windows-install.log'
           $install = Start-Process msiexec.exe -ArgumentList @('/i', ('"' + $msi.FullName + '"'), '/qn', '/norestart', '/L*v', ('"' + $installLog + '"')) -Wait -PassThru
           if ($install.ExitCode -notin @(0, 3010)) { Get-Content $installLog -Tail 100; throw "MSI installation failed: $($install.ExitCode)" }
-          $core = Join-Path $env:ProgramFiles 'Deskflow/deskflow-core.exe'
-          if (-not (Test-Path $core)) { throw 'Installed core executable is missing' }
-          & $core --version | Out-File -Encoding utf8 build/installed-version.txt
-          if ($LASTEXITCODE -ne 0) { throw 'Installed executable failed to start' }
-          $gui = Join-Path $env:ProgramFiles 'Deskflow/deskflow.exe'
-          & $gui --version | Out-File -Append -Encoding utf8 build/installed-version.txt
-          if ($LASTEXITCODE -ne 0) { throw 'Installed GUI dependencies failed to load' }
-          if ((Get-Content build/installed-version.txt -Raw) -notmatch '1\.28\.0') { throw 'Installed version is incorrect' }
+          $portable = Get-ChildItem build/deskflow-*-portable.zip | Select-Object -First 1
+          ./deploy/verify-windows-package.ps1 -ExpectedVersion 1.28.1 -Output build/windows-package-validation.json -PortableZip $portable.FullName
           $uninstall = Start-Process msiexec.exe -ArgumentList @('/x', ('"' + $msi.FullName + '"'), '/qn', '/norestart') -Wait -PassThru
           if ($uninstall.ExitCode -notin @(0, 3010)) { throw "MSI uninstall failed: $($uninstall.ExitCode)" }
+      - name: Verify upgrade with existing legacy settings
+        if: inputs.windows-baseline-run != ''
+        shell: pwsh
+        run: |
+          $baseline = Get-ChildItem build/upgrade-baseline/deskflow-*.msi | Select-Object -First 1
+          $candidate = Get-ChildItem build/deskflow-*.msi | Select-Object -First 1
+          ./deploy/test-windows-upgrade.ps1 -BaselineMsi $baseline.FullName -CandidateMsi $candidate.FullName -Output build/windows-upgrade-validation.json
+          ./deploy/verify-windows-package.ps1 -ExpectedVersion 1.28.1 -Output build/windows-upgrade-runtime-validation.json
+          $uninstall = Start-Process msiexec.exe -ArgumentList @('/x', ('"' + $candidate.FullName + '"'), '/qn', '/norestart') -Wait -PassThru
+          if ($uninstall.ExitCode -notin @(0, 3010)) { throw "Upgraded MSI uninstall failed: $($uninstall.ExitCode)" }
       - name: Include installation guide
         shell: pwsh
         run: |
@@ -138,5 +162,9 @@ jobs:
             build/使用说明.html
             build/SHA256.txt
             build/installed-version.txt
+            build/windows-package-validation.json
+            build/windows-upgrade-validation.json
+            build/windows-upgrade-runtime-validation.json
+            build/*install*.log
             build/src/unittests/Testing/Temporary/LastTest.log
           if-no-files-found: warn

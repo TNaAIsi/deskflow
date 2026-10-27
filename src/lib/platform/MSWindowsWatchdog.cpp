@@ -496,17 +496,21 @@ void MSWindowsWatchdog::initSasFunc()
 {
   // the SendSAS function is used to send a sas (secure attention sequence) to the
   // winlogon process. this is used to switch to the login screen.
-  HINSTANCE sasLib = LoadLibrary(L"sas.dll");
+  HINSTANCE sasLib = LoadLibraryExW(L"sas.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
   if (!sasLib) {
-    LOG_ERR("could not load sas.dll");
-    throw std::runtime_error(windowsErrorToString(GetLastError()));
+    LOG_WARN(
+        "Ctrl+Alt+Del emulation unavailable: could not load sas.dll: %s", windowsErrorToString(GetLastError()).c_str()
+    );
+    return;
   }
 
   LOG_DEBUG("loaded sas.dll, used to simulate ctrl-alt-del");
   m_sendSasFunc = (SendSas)GetProcAddress(sasLib, "SendSAS");
   if (!m_sendSasFunc) {
-    LOG_ERR("could not find SendSAS function in sas.dll");
-    throw std::runtime_error(windowsErrorToString(GetLastError()));
+    const auto error = GetLastError();
+    FreeLibrary(sasLib);
+    LOG_WARN("Ctrl+Alt+Del emulation unavailable: SendSAS not found: %s", windowsErrorToString(error).c_str());
+    return;
   }
 
   LOG_DEBUG("found SendSAS function in sas.dll");
@@ -517,7 +521,10 @@ void MSWindowsWatchdog::sasLoop(const void *) // NOSONAR - Thread entry point si
   LOG_VERBOSE("watchdog creating sas event");
 
   if (m_sendSasFunc == nullptr) {
-    throw std::runtime_error("SendSAS function not initialized");
+    // SAS is optional; ordinary keyboard/mouse sharing and service supervision
+    // remain usable on systems where the operating-system component is absent.
+    LOG_WARN("Ctrl+Alt+Del emulation is disabled");
+    return;
   }
 
   while (m_running) {
