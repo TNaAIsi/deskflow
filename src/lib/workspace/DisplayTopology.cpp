@@ -313,6 +313,14 @@ void DisplayTopology::removePeer(const QString &peer)
     publish();
 }
 
+void DisplayTopology::clearPeerDisplays()
+{
+  if (m_peerDisplays.isEmpty())
+    return;
+  m_peerDisplays.clear();
+  publish();
+}
+
 void DisplayTopology::publish()
 {
   QJsonArray result;
@@ -484,11 +492,60 @@ DisplayTopology::routeMotion(const QString &device, const QPoint &from, const QP
   return routeSnapshot(*std::atomic_load(&m_snapshot), device, from, to, edgeZone);
 }
 
+DisplayTopology::MotionResult
+DisplayTopology::routeInDirection(const QString &device, const QPoint &from, Edge edge) const
+{
+  return directionSnapshot(*std::atomic_load(&m_snapshot), device, from, edge);
+}
+
 DisplayTopology::MotionResult DisplayTopology::route(
     const QJsonObject &state, const QString &device, const QPoint &from, const QPoint &to, int edgeZone
 )
 {
   return routeSnapshot(*makeSnapshot(state), device, from, to, edgeZone);
+}
+
+DisplayTopology::MotionResult
+DisplayTopology::direction(const QJsonObject &state, const QString &device, const QPoint &from, Edge edge)
+{
+  return directionSnapshot(*makeSnapshot(state), device, from, edge);
+}
+
+DisplayTopology::MotionResult
+DisplayTopology::directionSnapshot(const Snapshot &snapshot, const QString &device, const QPoint &from, Edge edge)
+{
+  auto position = from;
+  // Switch-in-direction means the next computer, so walk across any adjacent
+  // monitors belonging to this same computer before choosing the destination.
+  // The bound also handles malformed cyclic layouts without an input-thread loop.
+  for (qsizetype step = 0; step <= snapshot.displays.size(); ++step) {
+    auto source = routeSnapshot(snapshot, device, position, position, 0);
+    if (!source.handled || !source.sourceRect.isValid() || edge == Edge::None)
+      return source;
+    position = source.point;
+    auto outside = position;
+    switch (edge) {
+    case Edge::Left:
+      outside.setX(source.sourceRect.left() - 1);
+      break;
+    case Edge::Right:
+      outside.setX(source.sourceRect.right() + 1);
+      break;
+    case Edge::Top:
+      outside.setY(source.sourceRect.top() - 1);
+      break;
+    case Edge::Bottom:
+      outside.setY(source.sourceRect.bottom() + 1);
+      break;
+    default:
+      return source;
+    }
+    auto destination = routeSnapshot(snapshot, device, position, outside, 0);
+    if (!destination.crossed || destination.targetDevice != device)
+      return destination;
+    position = destination.point;
+  }
+  return routeSnapshot(snapshot, device, from, from, 0);
 }
 
 DisplayTopology::MotionResult DisplayTopology::routeSnapshot(
@@ -498,6 +555,13 @@ DisplayTopology::MotionResult DisplayTopology::routeSnapshot(
   MotionResult result;
   if (!snapshot.enabled)
     return result;
+  // Explicit monitor mode retains authority even when a device has not sent
+  // geometry yet. The caller can clamp against its core desktop shape, but must
+  // not interpret missing metadata as permission to use a different layout.
+  result.handled = true;
+  result.targetDevice = device;
+  result.sourcePoint = to;
+  result.point = to;
   const Display *source = nullptr;
   bool resynchronize = false;
   for (const auto &display : snapshot.displays) {
@@ -533,8 +597,6 @@ DisplayTopology::MotionResult DisplayTopology::routeSnapshot(
   }
   if (!source)
     return result;
-  result.handled = true;
-  result.targetDevice = device;
   result.sourceDisplay = source->id;
   result.targetDisplay = source->id;
   result.sourceRect = source->native;
@@ -632,6 +694,18 @@ DisplayTopology::MotionResult DisplayTopology::routeSnapshot(
     result.targetDisplay = target.id;
     result.crossed = true;
     return result;
+  }
+  // An offline computer may occupy the canvas gap between two monitors of the
+  // same physical desktop. If no live arranged destination is available, let
+  // the OS continue into another valid local monitor rather than trapping the
+  // user on the first one. This never selects a different computer or a legacy
+  // link, and live arranged destinations above always retain precedence.
+  for (const auto &local : snapshot.displays) {
+    if (local.device == device && local.native.contains(to)) {
+      result.point = to;
+      result.targetDisplay = local.id;
+      break;
+    }
   }
   return result;
 }

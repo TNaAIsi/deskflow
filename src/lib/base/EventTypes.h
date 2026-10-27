@@ -141,6 +141,9 @@ enum class EventTypes : uint32_t
   */
   ServerSwitchInDirection,
 
+  /// Reconfigure native edge capture after the GUI publishes a monitor topology.
+  ServerDisplayTopologyChanged,
+
   /** This event is sent to inform the server to turn keyboard broadcasting on or off.
       The event data is a pointer to KeyboardBroadcastInfo.
   */

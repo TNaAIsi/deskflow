@@ -127,6 +127,7 @@ DisplayLayoutDialog::DisplayLayoutDialog(const QJsonObject &state, QWidget *pare
       m_view(new QGraphicsView(m_scene, this)),
       m_enabled(new QCheckBox(tr("Arrange and route each monitor separately"), this)),
       m_selection(new QLabel(this)),
+      m_saveError(new QLabel(this)),
       m_x(new QDoubleSpinBox(this)),
       m_y(new QDoubleSpinBox(this)),
       m_width(new QDoubleSpinBox(this)),
@@ -143,7 +144,20 @@ DisplayLayoutDialog::DisplayLayoutDialog(const QJsonObject &state, QWidget *pare
   instructions->setWordWrap(true);
   layout->addWidget(instructions);
   m_enabled->setChecked(state.value("enabled").toBool());
+  m_enabled->setObjectName("independentMonitorMode");
   layout->addWidget(m_enabled);
+  auto *modeHelp = new QLabel(
+      tr("When enabled, this canvas controls pointer directions and the computer grid is inactive. Devices without "
+         "display information stay outside automatic switching. Disable this option to use the computer grid again; "
+         "your monitor positions are kept. Saving here applies immediately."),
+      this
+  );
+  modeHelp->setWordWrap(true);
+  layout->addWidget(modeHelp);
+  m_saveError->setObjectName("layoutSaveError");
+  m_saveError->setWordWrap(true);
+  m_saveError->hide();
+  layout->addWidget(m_saveError);
   m_view->setRenderHint(QPainter::Antialiasing);
   m_view->setDragMode(QGraphicsView::RubberBandDrag);
   m_view->setMinimumHeight(360);
@@ -279,8 +293,18 @@ void DisplayLayoutDialog::arrange()
   fitDisplays();
 }
 
+void DisplayLayoutDialog::setSaveError(const QString &message)
+{
+  m_saveRejected = true;
+  m_saveError->setText(message);
+  m_saveError->setVisible(!message.isEmpty());
+}
+
 void DisplayLayoutDialog::save()
 {
+  m_saveRejected = false;
+  m_saveError->clear();
+  m_saveError->hide();
   QJsonArray array;
   QList<QRectF> occupied;
   for (auto *item : m_scene->items()) {
@@ -308,7 +332,8 @@ void DisplayLayoutDialog::save()
   result["enabled"] = m_enabled->isChecked();
   result["displays"] = array;
   Q_EMIT saved(result);
-  accept();
+  if (!m_saveRejected)
+    accept();
 }
 
 } // namespace deskflow::workspace

@@ -98,7 +98,7 @@ WorkspaceService::WorkspaceService(bool server, QObject *parent)
   connect(&m_transport, &WorkspaceTransport::peerConnected, this, [this](const QString &peer) {
     m_transport.send(peer, "displays", {{"displays", DisplayTopology::instance().localDisplays()}});
     if (m_server)
-      m_transport.send(peer, "layout", {{"layout", DisplayTopology::instance().layout()}});
+      m_transport.send(peer, "layout", layoutMessage());
     update();
   });
   connect(
@@ -110,6 +110,8 @@ WorkspaceService::WorkspaceService(bool server, QObject *parent)
       }
   );
   connect(&m_transport, &WorkspaceTransport::peerDisconnected, this, [this](const QString &peer) {
+    if (!m_server && m_transport.peers().isEmpty())
+      m_remoteLayoutMode.clear();
     m_files->peerDisconnected(peer);
     m_audio->peerDisconnected(peer);
     DisplayTopology::instance().removePeer(peer);
@@ -123,7 +125,7 @@ WorkspaceService::WorkspaceService(bool server, QObject *parent)
         m_offers.remove(key);
     if (m_server)
       for (const auto &name : m_transport.peers())
-        m_transport.send(name, "layout", {{"layout", DisplayTopology::instance().layout()}});
+        m_transport.send(name, "layout", layoutMessage());
     update();
   });
   connect(
@@ -138,6 +140,14 @@ WorkspaceService::WorkspaceService(bool server, QObject *parent)
   );
   connect(&m_transport, &WorkspaceTransport::messageReceived, this, &WorkspaceService::message);
   connect(&DisplayTopology::instance(), &DisplayTopology::changed, this, &WorkspaceService::update);
+  connect(Settings::instance(), &Settings::settingsChanged, this, [this](const QString &key) {
+    if (key != Settings::Server::ExternalConfig)
+      return;
+    if (m_server)
+      for (const auto &peer : m_transport.peers())
+        m_transport.send(peer, "layout", layoutMessage());
+    update();
+  });
   connect(
       &DisplayTopology::instance(), &DisplayTopology::localDisplaysChanged, this,
       [this](const QJsonArray &displays) {
@@ -145,7 +155,7 @@ WorkspaceService::WorkspaceService(bool server, QObject *parent)
           m_transport.send(peer, "displays", {{"displays", displays}});
         if (m_server)
           for (const auto &peer : m_transport.peers())
-            m_transport.send(peer, "layout", {{"layout", DisplayTopology::instance().layout()}});
+            m_transport.send(peer, "layout", layoutMessage());
         update();
       }
   );
@@ -267,9 +277,14 @@ void WorkspaceService::message(
     DisplayTopology::instance().setPeerDisplays(peer, metadata.value("displays").toArray());
     if (m_server)
       for (const auto &name : m_transport.peers())
-        m_transport.send(name, "layout", {{"layout", DisplayTopology::instance().layout()}});
+        m_transport.send(name, "layout", layoutMessage());
     update();
   } else if (type == "layout") {
+    if (!m_server) {
+      const auto mode = metadata.value("mode").toString();
+      if (mode == "external" || mode == "monitors" || mode == "computers")
+        m_remoteLayoutMode = mode;
+    }
     applyLayout(metadata.value("layout").toObject(), m_server);
   } else if (type == "identify") {
     const auto device = metadata.value("device").toString(m_name);
@@ -282,6 +297,12 @@ void WorkspaceService::message(
 
 void WorkspaceService::applyLayout(const QJsonObject &layout, bool broadcast)
 {
+  if (m_server && Settings::value(Settings::Server::ExternalConfig).toBool()) {
+    reportError(tr(
+        "Layout is controlled by the server configuration file. Disable external configuration before editing displays."
+    ));
+    return;
+  }
   if (!DisplayTopology::instance().setLayout(layout, !m_server)) {
     reportError(tr("Display layout was rejected; refresh the connected displays and try again."));
     return;
@@ -293,7 +314,7 @@ void WorkspaceService::applyLayout(const QJsonObject &layout, bool broadcast)
   Settings::save(false);
   if (broadcast)
     for (const auto &peer : m_transport.peers())
-      m_transport.send(peer, "layout", {{"layout", DisplayTopology::instance().layout()}});
+      m_transport.send(peer, "layout", layoutMessage());
   update();
 }
 
@@ -346,6 +367,20 @@ void WorkspaceService::command(const QJsonObject &object)
   update();
 }
 
+QString WorkspaceService::selectedLayoutMode() const
+{
+  if (m_server && Settings::value(Settings::Server::ExternalConfig).toBool())
+    return QStringLiteral("external");
+  if (!m_server && !m_remoteLayoutMode.isEmpty())
+    return m_remoteLayoutMode;
+  return DisplayTopology::instance().enabled() ? QStringLiteral("monitors") : QStringLiteral("computers");
+}
+
+QJsonObject WorkspaceService::layoutMessage() const
+{
+  return {{"layout", DisplayTopology::instance().layout()}, {"mode", selectedLayoutMode()}};
+}
+
 QJsonObject WorkspaceService::state() const
 {
   QJsonArray transfers, offers, errors;
@@ -363,6 +398,7 @@ QJsonObject WorkspaceService::state() const
       {"peers", m_transport.peerState()},
       {"options", m_options},
       {"topology", DisplayTopology::instance().serializedState()},
+      {"layoutMode", selectedLayoutMode()},
       {"audioDevices", AudioService::outputDevices()},
       {"audioStatus", m_audioStatus},
       {"transfers", transfers},

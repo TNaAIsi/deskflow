@@ -138,8 +138,12 @@ int main(int argc, char **argv)
   auto &topology = deskflow::workspace::DisplayTopology::instance();
   topology.initialize(Settings::value(Settings::Core::ComputerName).toString());
   const auto storedLayout = QJsonDocument::fromJson(Settings::value(Settings::Workspace::Layout).toString().toUtf8());
-  if (storedLayout.isObject() && !storedLayout.object().isEmpty())
-    topology.setLayout(storedLayout.object());
+  if (storedLayout.isObject() && !storedLayout.object().isEmpty()) {
+    auto effectiveLayout = storedLayout.object();
+    if (Settings::value(Settings::Server::ExternalConfig).toBool())
+      effectiveLayout.insert("enabled", false);
+    topology.setLayout(effectiveLayout);
+  }
   const auto options =
       QJsonDocument::fromJson(Settings::value(Settings::Workspace::Options).toString().toUtf8()).object();
   deskflow::workspace::g_fileClipboardEnabled.store(
@@ -153,7 +157,10 @@ int main(int argc, char **argv)
         const auto command = document.object();
         if (command.value("action").toString() != "runtimeTopology")
           return;
-        topology.setLayout(command.value("topology").toObject(), true);
+        auto effectiveLayout = command.value("topology").toObject();
+        if (command.value("externalConfig").toBool(Settings::value(Settings::Server::ExternalConfig).toBool()))
+          effectiveLayout.insert("enabled", false);
+        topology.setLayout(effectiveLayout, true);
         const bool enabled = command.value("fileClipboardEnabled").toBool();
         deskflow::workspace::g_fileClipboardEnabled.store(enabled);
         if (!enabled)
@@ -161,11 +168,10 @@ int main(int argc, char **argv)
       }
   );
   QObject::connect(ipcServer, &deskflow::core::ipc::CoreIpcServer::workspacePeerDisconnected, &app, [&topology] {
-    auto layout = topology.layout();
-    layout.insert("enabled", false);
-    // A service-mode core may outlive its GUI. Fall back to the original
-    // computer layout while no user-session provider can refresh monitor data.
-    topology.setLayout(layout, true);
+    // A service-mode core may outlive its GUI. Retain the selected monitor mode
+    // and local pointer movement, but revoke stale remote geometry until an
+    // authenticated provider returns. Legacy routing needs an explicit choice.
+    topology.clearPeerDisplays();
   });
 
   QThread coreThread;

@@ -72,6 +72,8 @@ def main():
     close_list()
     pictures = []
     for filename, caption in (
+        ("server-monitors.png", "服务端的统一显示器布局入口与电脑设置"),
+        ("server-computers.png", "明确选择后的整机兼容布局"),
         ("workspace-files.png", "文件共享与传输进度"),
         ("workspace-audio.png", "固定音频路由"),
         ("workspace-monitors.png", "独立显示器布局示例"),

@@ -221,7 +221,12 @@ WorkspaceDialog::WorkspaceDialog(QWidget *parent)
   );
   displayHelp->setWordWrap(true);
   displaysLayout->addWidget(displayHelp);
-  auto *editDisplays = new QPushButton(tr("Arrange individual monitors…"), displaysPage);
+  m_layoutStatus = new QLabel(displaysPage);
+  m_layoutStatus->setObjectName("workspaceLayoutStatus");
+  m_layoutStatus->setWordWrap(true);
+  displaysLayout->addWidget(m_layoutStatus);
+  auto *editDisplays = new QPushButton(tr("Display layout…"), displaysPage);
+  editDisplays->setObjectName("openDisplayLayout");
   displaysLayout->addWidget(editDisplays);
   displaysLayout->addStretch();
   tabs->addTab(displaysPage, tr("Monitors"));
@@ -292,6 +297,17 @@ void WorkspaceDialog::updatePeers(QComboBox *combo, const QJsonArray &peers, con
 void WorkspaceDialog::refresh(const QJsonObject &state)
 {
   m_state = state;
+  const auto mode = state.value("layoutMode").toString();
+  if (mode == "external")
+    m_layoutStatus->setText(tr("Layout is controlled by the server's configuration file."));
+  else if (mode == "monitors" || (mode.isEmpty() && state.value("topology").toObject().value("enabled").toBool()))
+    m_layoutStatus->setText(
+        tr("Independent monitor layout is selected. The computer grid does not control pointer directions.")
+    );
+  else
+    m_layoutStatus->setText(
+        tr("Computer grid layout is selected. Enable independent monitors in Display layout to arrange each screen.")
+    );
   const auto peers = state.value("peers").toArray();
   updatePeers(m_fileTarget, peers, tr("All connected computers"));
   updatePeers(m_audioTarget, peers, tr("All connected computers"));
@@ -482,23 +498,5 @@ void WorkspaceDialog::openSelectedTransfer()
 
 void WorkspaceDialog::editLayout()
 {
-  const auto topology = m_state.value("topology").toObject();
-  if (topology.value("displays").toArray().isEmpty()) {
-    QMessageBox::information(
-        this, windowTitle(), tr("Start sharing and connect the computers before arranging monitors.")
-    );
-    return;
-  }
-  auto *dialog = new deskflow::workspace::DisplayLayoutDialog(topology, this);
-  dialog->setAttribute(Qt::WA_DeleteOnClose);
-  connect(dialog, &deskflow::workspace::DisplayLayoutDialog::saved, this, [this](const QJsonObject &layout) {
-    send({{"action", "layout"}, {"layout", layout}});
-  });
-  connect(
-      dialog, &deskflow::workspace::DisplayLayoutDialog::requestIdentify, this,
-      [this](const QString &device, const QString &id) {
-        send({{"action", "identify"}, {"device", device}, {"id", id}});
-      }
-  );
-  dialog->open();
+  Q_EMIT displayLayoutRequested();
 }

@@ -22,6 +22,9 @@ class DisplayLayoutDialog : public QDialog
 
 public:
   explicit DisplayLayoutDialog(const QJsonObject &state, QWidget *parent = nullptr);
+  // A synchronous save handler can keep the editor open when its provider
+  // disappeared or the current layout could not be accepted.
+  void setSaveError(const QString &message);
 
 Q_SIGNALS:
   void saved(const QJsonObject &state);
@@ -40,11 +43,13 @@ private:
   QGraphicsView *m_view;
   QCheckBox *m_enabled;
   QLabel *m_selection;
+  QLabel *m_saveError;
   QDoubleSpinBox *m_x;
   QDoubleSpinBox *m_y;
   QDoubleSpinBox *m_width;
   QDoubleSpinBox *m_height;
   bool m_loading = false;
+  bool m_saveRejected = false;
 };
 
 } // namespace deskflow::workspace

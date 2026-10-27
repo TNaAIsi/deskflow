@@ -627,6 +627,18 @@ Do you want to connect to the server?
         <translation>%1 Error de conexión</translation>
     </message>
     <message>
+        <source>Display layout</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Layout is controlled by the server&apos;s configuration file. Disable the external configuration in Server Configuration before using the visual layout.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Connect to the server before changing its display layout.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Invalid Computer Name</source>
         <translation type="unfinished"></translation>
     </message>
@@ -965,7 +977,7 @@ Además, verifique que puede %1 el archivo de configuración del servidor: %2</t
     </message>
     <message>
         <source>Computers</source>
-        <translation type="unfinished">Computadoras</translation>
+        <translation type="obsolete">Computadoras</translation>
     </message>
     <message>
         <source>Drag a computer from the grid to the trashcan to remove it.</source>
@@ -1100,6 +1112,58 @@ Al habilitar esta opción, se deshabilitará la interfaz gráfica de usuario (GU
         <translation type="unfinished">Ruta del archivo de configuración</translation>
     </message>
     <message>
+        <source>Display layout…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Display layout has its own Save button. Saving or cancelling server settings does not undo saved display positions.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Registered computers and keyboard settings. This list does not set display positions.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Add computer…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Edit computer…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove computer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>External configuration file controls computer links. Turn off external configuration and save server settings before arranging displays here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Independent monitor layout. Computer positions are edited in Display layout; the list manages computer identity and keyboard settings.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Compatibility computer layout is selected. Each computer is one block in the grid below. Use Display layout to arrange individual monitors instead.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Compatibility layout: drag whole computers to set their crossing directions.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save computer changes before arranging displays.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 (server)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Aliases: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>%1 Configurations (*.conf);;All files (*.*)</source>
         <extracomment>%1 is replaced with the application names (*.conf) and (*.*) should not be translated</extracomment>
         <translation type="unfinished">%1 Configuraciones (*.conf);;Todos los archivos (*.*)</translation>
@@ -1118,6 +1182,10 @@ Al habilitar esta opción, se deshabilitará la interfaz gráfica de usuario (GU
     </message>
     <message>
         <source>Keep cursor local during full-screen apps or capture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Displays and computers</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1575,10 +1643,6 @@ Al habilitar esta opción, se deshabilitará la interfaz gráfica de usuario (GU
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Arrange individual monitors…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Monitors</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1592,6 +1656,18 @@ Al habilitar esta opción, se deshabilitará la interfaz gráfica de usuario (GU
     </message>
     <message>
         <source>%1 (offline)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Layout is controlled by the server&apos;s configuration file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Independent monitor layout is selected. The computer grid does not control pointer directions.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Computer grid layout is selected. Enable independent monitors in Display layout to arrange each screen.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1627,15 +1703,15 @@ Al habilitar esta opción, se deshabilitará la interfaz gráfica de usuario (GU
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Display layout…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Start sharing before sending files.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Save received files</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Start sharing and connect the computers before arranging monitors.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1705,6 +1781,10 @@ Al habilitar esta opción, se deshabilitará la interfaz gráfica de usuario (GU
     </message>
     <message>
         <source>Drag each monitor to match your desk. Touching edges connect; colours identify computers. You can place a Mac monitor between two Windows monitors. This does not change system display settings.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>When enabled, this canvas controls pointer directions and the computer grid is inactive. Devices without display information stay outside automatic switching. Disable this option to use the computer grid again; your monitor positions are kept. Saving here applies immediately.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1779,6 +1859,10 @@ Al habilitar esta opción, se deshabilitará la interfaz gráfica de usuario (GU
     <name>deskflow::workspace::WorkspaceService</name>
     <message>
         <source>Workspace requires an input port from 1 to 65534.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Layout is controlled by the server configuration file. Disable external configuration before editing displays.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

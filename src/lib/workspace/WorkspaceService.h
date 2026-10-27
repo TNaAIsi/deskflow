@@ -34,6 +34,8 @@ private:
   void message(const QString &peer, const QString &type, const QJsonObject &metadata, const QByteArray &payload);
   void update();
   void reportError(const QString &error);
+  QString selectedLayoutMode() const;
+  QJsonObject layoutMessage() const;
   bool sendFiles(const QString &peer, const QString &type, const QJsonObject &meta, const QByteArray &data);
 
   WorkspaceTransport m_transport;
@@ -48,6 +50,7 @@ private:
   QStringList m_errors;
   QString m_audioStatus;
   QString m_name;
+  QString m_remoteLayoutMode;
   bool m_server;
   bool m_started = false;
   quint16 m_port = 0;

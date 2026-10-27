@@ -7,8 +7,11 @@
 #include "workspace/DisplayLayoutDialog.h"
 #include "workspace/WorkspaceService.h"
 #include <QComboBox>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QJsonArray>
+#include <QPushButton>
+#include <QSignalSpy>
 #include <QTabWidget>
 #include <QTemporaryDir>
 #include <QTest>
@@ -133,6 +136,57 @@ private Q_SLOTS:
     QVERIFY(dialog.m_service.isNull());
     dialog.setService(nullptr);
     QVERIFY(!dialog.m_poll.isActive());
+  }
+  void displayEntryDelegatesToSharedEditorAndShowsAuthority()
+  {
+    WorkspaceDialog dialog;
+    auto state = fixture();
+    state["layoutMode"] = "monitors";
+    dialog.refresh(state);
+    QSignalSpy requested(&dialog, &WorkspaceDialog::displayLayoutRequested);
+    auto *button = dialog.findChild<QPushButton *>("openDisplayLayout");
+    QVERIFY(button);
+    button->click();
+    QCOMPARE(requested.count(), 1);
+    QVERIFY(!dialog.findChild<deskflow::workspace::DisplayLayoutDialog *>());
+    QVERIFY(!dialog.m_layoutStatus->text().isEmpty());
+    const auto monitorStatus = dialog.m_layoutStatus->text();
+    state["layoutMode"] = "computers";
+    dialog.refresh(state);
+    QVERIFY(dialog.m_layoutStatus->text() != monitorStatus);
+    const auto computerStatus = dialog.m_layoutStatus->text();
+    state["layoutMode"] = "external";
+    dialog.refresh(state);
+    QVERIFY(dialog.m_layoutStatus->text() != monitorStatus);
+    QVERIFY(dialog.m_layoutStatus->text() != computerStatus);
+  }
+  void externalFileRejectsVisualLayoutChanges()
+  {
+    const auto previous = Settings::value(Settings::Server::ExternalConfig);
+    Settings::setValue(Settings::Server::ExternalConfig, true);
+    deskflow::workspace::WorkspaceService service(true);
+    const auto before = service.state().value("topology");
+    service.command({{"action", "layout"}, {"layout", fixture().value("topology")}});
+    QCOMPARE(service.state().value("layoutMode").toString(), QString("external"));
+    QCOMPARE(service.state().value("topology"), before);
+    QVERIFY(!service.state().value("errors").toArray().isEmpty());
+    Settings::setValue(Settings::Server::ExternalConfig, previous);
+  }
+  void lostProviderKeepsLayoutEditsOpenForRetry()
+  {
+    deskflow::workspace::DisplayLayoutDialog dialog(fixture().value("topology").toObject());
+    dialog.show();
+    auto *buttons = dialog.findChild<QDialogButtonBox *>();
+    QVERIFY(buttons);
+    const auto rejected = connect(&dialog, &deskflow::workspace::DisplayLayoutDialog::saved, &dialog, [&dialog] {
+      dialog.setSaveError("Connection lost; reconnect to retry.");
+    });
+    buttons->button(QDialogButtonBox::Save)->click();
+    QVERIFY(dialog.isVisible());
+    QVERIFY(!dialog.findChild<QLabel *>("layoutSaveError")->text().isEmpty());
+    disconnect(rejected);
+    buttons->button(QDialogButtonBox::Save)->click();
+    QCOMPARE(dialog.result(), QDialog::Accepted);
   }
 };
 QTEST_MAIN(WorkspaceDialogTests)

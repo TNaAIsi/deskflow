@@ -41,6 +41,9 @@ public:
   explicit WorkspaceDialog(QWidget *parent = nullptr);
   void setService(deskflow::workspace::WorkspaceService *service);
 
+Q_SIGNALS:
+  void displayLayoutRequested();
+
 private:
   friend class WorkspaceDialogTests;
   void refresh(const QJsonObject &state);
@@ -58,6 +61,7 @@ private:
   QLabel *m_status;
   QLabel *m_audioStatus;
   QLabel *m_errors;
+  QLabel *m_layoutStatus;
   QCheckBox *m_enabled;
   QCheckBox *m_clipboard;
   QCheckBox *m_audioSend;

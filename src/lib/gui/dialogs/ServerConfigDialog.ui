@@ -24,7 +24,7 @@
     <widget class="QTabWidget" name="tabWidget">
      <widget class="QWidget" name="tabComputers">
       <attribute name="title">
-       <string>Computers</string>
+       <string>Displays and computers</string>
       </attribute>
       <layout class="QVBoxLayout">
        <property name="leftMargin">

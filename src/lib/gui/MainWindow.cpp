@@ -33,6 +33,7 @@
 #include "gui/widgets/LogDock.h"
 #include "net/FingerprintDatabase.h"
 #include "widgets/StatusBar.h"
+#include "workspace/DisplayLayoutDialog.h"
 #include "workspace/DisplayTopology.h"
 #include "workspace/WorkspaceService.h"
 
@@ -177,6 +178,12 @@ MainWindow::MainWindow()
   }
 
   applyConfig();
+  auto &topology = deskflow::workspace::DisplayTopology::instance();
+  topology.initialize(Settings::value(Settings::Core::ComputerName).toString());
+  const auto savedLayout =
+      QJsonDocument::fromJson(Settings::value(Settings::Workspace::Layout).toString().toUtf8()).object();
+  if (!savedLayout.isEmpty())
+    topology.setLayout(savedLayout);
   m_statusBar->setSecurityIcon(TlsUtility::isEnabled());
   restoreWindow();
 
@@ -372,6 +379,8 @@ void MainWindow::toggleLogVisible(bool visible)
 
 void MainWindow::settingsChanged(const QString &key)
 {
+  if (key == Settings::Server::ExternalConfig)
+    syncWorkspaceTopology();
   if (key == Settings::Log::Level) {
     m_coreProcess.applyLogLevel();
     return;
@@ -636,6 +645,7 @@ void MainWindow::serverConnectionConfigureClient(const QString &clientName)
 {
   m_serverConfigDialogVisible = true;
   ServerConfigDialog dialog(this, m_serverConfig);
+  connectLayoutEntry(dialog);
   if (dialog.addClient(clientName) && dialog.exec() == QDialog::Accepted) {
     m_coreProcess.restart();
   }
@@ -701,6 +711,7 @@ void MainWindow::createMenuBar()
     } else {
       auto *created = new WorkspaceDialog(this);
       created->setService(m_workspaceService);
+      connect(created, &WorkspaceDialog::displayLayoutRequested, this, &MainWindow::showDisplayLayout);
       created->show();
     }
   });
@@ -1055,15 +1066,152 @@ void MainWindow::syncWorkspaceTopology()
     return;
   const auto options =
       QJsonDocument::fromJson(Settings::value(Settings::Workspace::Options).toString().toUtf8()).object();
+  auto topology = deskflow::workspace::DisplayTopology::instance().serializedState();
+  const bool external = displayLayoutState().value("layoutMode").toString() == "external";
+  if (external)
+    topology["enabled"] = false;
   const QJsonObject runtime{
       {"action", "runtimeTopology"},
-      {"topology", deskflow::workspace::DisplayTopology::instance().serializedState()},
+      {"topology", topology},
+      {"externalConfig", external},
       {"fileClipboardEnabled", options.value("enabled").toBool(true) && options.value("fileClipboard").toBool(true)}
   };
   if (runtime == m_lastWorkspaceRuntime)
     return;
   m_workspaceCoreIpc->sendWorkspaceCommand(runtime);
   m_lastWorkspaceRuntime = runtime;
+}
+
+QJsonObject MainWindow::displayLayoutState() const
+{
+  if (m_workspaceService)
+    return m_workspaceService->state();
+  const auto topology = deskflow::workspace::DisplayTopology::instance().serializedState();
+  const bool external =
+      m_coreProcess.mode() == CoreMode::Server && Settings::value(Settings::Server::ExternalConfig).toBool();
+  return {
+      {"topology", topology},
+      {"layoutMode", external                             ? "external"
+                     : topology.value("enabled").toBool() ? "monitors"
+                                                          : "computers"}
+  };
+}
+
+void MainWindow::connectLayoutEntry(ServerConfigDialog &dialog)
+{
+  dialog.setLayoutState(displayLayoutState());
+  connect(&dialog, &ServerConfigDialog::displayLayoutRequested, this, &MainWindow::showDisplayLayout);
+  connect(
+      &deskflow::workspace::DisplayTopology::instance(), &deskflow::workspace::DisplayTopology::changed, &dialog,
+      [this, &dialog] { dialog.setLayoutState(displayLayoutState()); }
+  );
+  if (m_workspaceService)
+    connect(
+        m_workspaceService, &deskflow::workspace::WorkspaceService::stateChanged, &dialog,
+        &ServerConfigDialog::setLayoutState
+    );
+}
+
+void MainWindow::showDisplayLayout()
+{
+  if (m_displayLayoutDialog) {
+    m_displayLayoutDialog->show();
+    m_displayLayoutDialog->raise();
+    m_displayLayoutDialog->activateWindow();
+    return;
+  }
+  const auto state = displayLayoutState();
+  if (state.value("layoutMode").toString() == "external") {
+    QMessageBox::information(
+        this, tr("Display layout"),
+        tr("Layout is controlled by the server's configuration file. Disable the external configuration in Server "
+           "Configuration before using the visual layout.")
+    );
+    return;
+  }
+  if (m_coreProcess.mode() == CoreMode::Client &&
+      (!m_workspaceService || m_workspaceService->state().value("peers").toArray().isEmpty())) {
+    QMessageBox::information(
+        this, tr("Display layout"), tr("Connect to the server before changing its display layout.")
+    );
+    return;
+  }
+  auto *origin = qobject_cast<QWidget *>(sender());
+  auto *dialog =
+      new deskflow::workspace::DisplayLayoutDialog(state.value("topology").toObject(), origin ? origin : this);
+  m_displayLayoutDialog = dialog;
+  dialog->setObjectName("displayLayoutEditor");
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
+  const bool editingAsClient = m_coreProcess.mode() == CoreMode::Client;
+  const auto editingMode = m_coreProcess.mode();
+  connect(
+      dialog, &deskflow::workspace::DisplayLayoutDialog::saved, this,
+      [this, dialog, editingAsClient, editingMode](const QJsonObject &edited) {
+        if (m_coreProcess.mode() != editingMode) {
+          dialog->setSaveError(tr("Sharing mode changed. Reopen Display layout before saving these changes."));
+          return;
+        }
+        if (editingAsClient && (m_coreProcess.mode() != CoreMode::Client || !m_workspaceService ||
+                                m_workspaceService->state().value("peers").toArray().isEmpty())) {
+          dialog->setSaveError(
+              tr("The server connection was lost. Your edits are kept in this window; reconnect and save again.")
+          );
+          return;
+        }
+        if (displayLayoutState().value("layoutMode").toString() == "external") {
+          dialog->setSaveError(
+              tr("The server now uses an external configuration file. Your edits have not been applied.")
+          );
+          return;
+        }
+        // Refresh live metadata while retaining only the user's canvas edits. A
+        // screen hotplug or reconnect during editing must not publish stale native
+        // coordinates or resurrect a disconnected screen as connected.
+        auto layout = deskflow::workspace::DisplayTopology::instance().serializedState();
+        auto displays = layout.value("displays").toArray();
+        const auto editedDisplays = edited.value("displays").toArray();
+        for (qsizetype i = 0; i < displays.size(); ++i) {
+          auto display = displays.at(i).toObject();
+          for (const auto &value : editedDisplays) {
+            const auto placement = value.toObject();
+            if (placement.value("device") == display.value("device") && placement.value("id") == display.value("id")) {
+              display["canvas"] = placement.value("canvas");
+              break;
+            }
+          }
+          displays[i] = display;
+        }
+        layout["displays"] = displays;
+        layout["enabled"] = edited.value("enabled");
+        if (m_workspaceService) {
+          const auto revision = deskflow::workspace::DisplayTopology::instance().revision();
+          m_workspaceService->command({{"action", "layout"}, {"layout", layout}});
+          if (!editingAsClient && deskflow::workspace::DisplayTopology::instance().revision() == revision)
+            dialog->setSaveError(tr(
+                "The display information changed and this layout could not be saved. Adjust the monitors and try again."
+            ));
+        } else if (deskflow::workspace::DisplayTopology::instance().setLayout(layout)) {
+          Settings::setValue(
+              Settings::Workspace::Layout, QString::fromUtf8(QJsonDocument(layout).toJson(QJsonDocument::Compact))
+          );
+          Settings::save(false);
+        } else {
+          dialog->setSaveError(tr(
+              "The display information changed and this layout could not be saved. Adjust the monitors and try again."
+          ));
+        }
+      }
+  );
+  connect(
+      dialog, &deskflow::workspace::DisplayLayoutDialog::requestIdentify, this,
+      [this](const QString &device, const QString &id) {
+        if (m_workspaceService)
+          m_workspaceService->command({{"action", "identify"}, {"device", device}, {"id", id}});
+        else if (device == Settings::value(Settings::Core::ComputerName).toString())
+          deskflow::workspace::DisplayTopology::instance().identifyLocalDisplay(id);
+      }
+  );
+  dialog->open();
 }
 
 void MainWindow::coreConnectionStateChanged(ConnectionState state)
@@ -1167,6 +1315,7 @@ void MainWindow::updateText()
 void MainWindow::showConfigureServer(const QString &message)
 {
   ServerConfigDialog dialog(this, serverConfig());
+  connectLayoutEntry(dialog);
   dialog.message(message);
   if ((dialog.exec() == QDialog::Accepted) && m_coreProcess.isStarted()) {
     m_coreProcess.restart();

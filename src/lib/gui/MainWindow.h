@@ -32,6 +32,7 @@ class QMenu;
 class QLocalServer;
 
 class DeskflowApplication;
+class ServerConfigDialog;
 class LogDock;
 class StatusBar;
 
@@ -45,7 +46,8 @@ class CoreIpcClient;
 } // namespace deskflow::gui::ipc
 namespace deskflow::workspace {
 class WorkspaceService;
-}
+class DisplayLayoutDialog;
+} // namespace deskflow::workspace
 
 class MainWindow : public QMainWindow
 {
@@ -98,6 +100,9 @@ private:
   void coreProcessStateChanged(ProcessState state);
   void syncWorkspace();
   void syncWorkspaceTopology();
+  void showDisplayLayout();
+  QJsonObject displayLayoutState() const;
+  void connectLayoutEntry(ServerConfigDialog &dialog);
 
   void trayIconActivated(QSystemTrayIcon::ActivationReason reason);
   void serverConnectionConfigureClient(const QString &clientName);
@@ -191,6 +196,7 @@ private:
   deskflow::gui::ipc::DaemonIpcClient *m_daemonIpcClient = nullptr;
   deskflow::gui::ipc::CoreIpcClient *m_workspaceCoreIpc = nullptr;
   QPointer<deskflow::workspace::WorkspaceService> m_workspaceService;
+  QPointer<deskflow::workspace::DisplayLayoutDialog> m_displayLayoutDialog;
   QJsonObject m_lastWorkspaceRuntime;
   bool m_workspaceServer = false;
 

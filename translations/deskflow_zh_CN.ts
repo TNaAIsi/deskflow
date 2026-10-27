@@ -755,6 +755,34 @@ Additionally, check you are able to %1 the server config file: %2</source>
         <source>&lt;p&gt;Keyboard layout support requires matching layouts on all computers. The following layouts from the other computer are not installed on this computer:&lt;/p&gt;&lt;p&gt;&lt;b&gt;%1&lt;/b&gt;&lt;/p&gt;&lt;p&gt;Please install them to enable support for these layouts.&lt;/p&gt;</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Display layout</source>
+        <translation>显示器布局</translation>
+    </message>
+    <message>
+        <source>Layout is controlled by the server&apos;s configuration file. Disable the external configuration in Server Configuration before using the visual layout.</source>
+        <translation>当前布局由服务端配置文件管理。请在服务端配置中关闭外部配置并保存，再使用视觉布局。</translation>
+    </message>
+    <message>
+        <source>Connect to the server before changing its display layout.</source>
+        <translation>请先连接服务端，再修改显示器布局。</translation>
+    </message>
+    <message>
+        <source>The server connection was lost. Your edits are kept in this window; reconnect and save again.</source>
+        <translation>与服务端的连接已断开。此窗口会保留尚未保存的修改，请重新连接后再次保存。</translation>
+    </message>
+    <message>
+        <source>The server now uses an external configuration file. Your edits have not been applied.</source>
+        <translation>服务端已改用外部配置文件，本次布局修改尚未应用。</translation>
+    </message>
+    <message>
+        <source>The display information changed and this layout could not be saved. Adjust the monitors and try again.</source>
+        <translation>显示器信息已变化，本次布局未能保存。请调整显示器后重试。</translation>
+    </message>
+    <message>
+        <source>Sharing mode changed. Reopen Display layout before saving these changes.</source>
+        <translation>共享角色已变化，请重新打开显示器布局后再保存修改。</translation>
+    </message>
 </context>
 <context>
     <name>NewComputerWidget</name>
@@ -967,7 +995,7 @@ Additionally, check you are able to %1 the server config file: %2</source>
     </message>
     <message>
         <source>Computers</source>
-        <translation>计算机</translation>
+        <translation type="vanished">计算机</translation>
     </message>
     <message>
         <source>Drag a computer from the grid to the trashcan to remove it.</source>
@@ -1121,6 +1149,62 @@ Enabling this setting will disable the server config GUI.</source>
     <message>
         <source>Keep cursor local during full-screen apps or capture</source>
         <translation>全屏或应用限制鼠标时，禁止鼠标自动跨电脑</translation>
+    </message>
+    <message>
+        <source>Displays and computers</source>
+        <translation>显示器与电脑</translation>
+    </message>
+    <message>
+        <source>Display layout…</source>
+        <translation>显示器布局…</translation>
+    </message>
+    <message>
+        <source>Display layout has its own Save button. Saving or cancelling server settings does not undo saved display positions.</source>
+        <translation>显示器布局单独保存；保存或取消其他服务端设置，不会撤销已经保存的显示器位置。</translation>
+    </message>
+    <message>
+        <source>Registered computers and keyboard settings. This list does not set display positions.</source>
+        <translation>电脑与键盘设置。显示器位置请在布局编辑器中调整。</translation>
+    </message>
+    <message>
+        <source>Add computer…</source>
+        <translation>添加电脑…</translation>
+    </message>
+    <message>
+        <source>Edit computer…</source>
+        <translation>编辑电脑…</translation>
+    </message>
+    <message>
+        <source>Remove computer</source>
+        <translation>移除电脑</translation>
+    </message>
+    <message>
+        <source>External configuration file controls computer links. Turn off external configuration and save server settings before arranging displays here.</source>
+        <translation>当前使用外部配置文件管理电脑连接。请关闭外部配置并保存服务端设置，再排列显示器。</translation>
+    </message>
+    <message>
+        <source>Independent monitor layout. Computer positions are edited in Display layout; the list manages computer identity and keyboard settings.</source>
+        <translation>当前使用独立显示器布局。点击“显示器布局”调整位置，下方列表用于管理电脑名称、别名和键盘设置。</translation>
+    </message>
+    <message>
+        <source>Compatibility computer layout is selected. Each computer is one block in the grid below. Use Display layout to arrange individual monitors instead.</source>
+        <translation>当前使用整机兼容布局，下方每个方块代表一台电脑。点击“显示器布局”可以分别排列每块屏幕。</translation>
+    </message>
+    <message>
+        <source>Compatibility layout: drag whole computers to set their crossing directions.</source>
+        <translation>整机兼容布局：拖动电脑方块，设置跨电脑方向。</translation>
+    </message>
+    <message>
+        <source>Save computer changes before arranging displays.</source>
+        <translation>请先保存电脑设置的更改，再排列显示器。</translation>
+    </message>
+    <message>
+        <source>%1 (server)</source>
+        <translation>%1（服务端）</translation>
+    </message>
+    <message>
+        <source>Aliases: %1</source>
+        <translation>别名：%1</translation>
     </message>
 </context>
 <context>
@@ -1577,7 +1661,7 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Arrange individual monitors…</source>
-        <translation>单独排列显示器…</translation>
+        <translation type="vanished">单独排列显示器…</translation>
     </message>
     <message>
         <source>Monitors</source>
@@ -1649,7 +1733,23 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Start sharing and connect the computers before arranging monitors.</source>
-        <translation>请先启动共享并连接电脑，再排列显示器。</translation>
+        <translation type="vanished">请先启动共享并连接电脑，再排列显示器。</translation>
+    </message>
+    <message>
+        <source>Display layout…</source>
+        <translation>显示器布局…</translation>
+    </message>
+    <message>
+        <source>Layout is controlled by the server&apos;s configuration file.</source>
+        <translation>当前布局由服务端配置文件管理。</translation>
+    </message>
+    <message>
+        <source>Independent monitor layout is selected. The computer grid does not control pointer directions.</source>
+        <translation>当前使用独立显示器布局，旧电脑网格不再控制跨屏方向。</translation>
+    </message>
+    <message>
+        <source>Computer grid layout is selected. Enable independent monitors in Display layout to arrange each screen.</source>
+        <translation>当前使用整机网格布局。可在“显示器布局”中开启独立显示器模式，分别排列每块屏幕。</translation>
     </message>
 </context>
 <context>
@@ -1760,6 +1860,10 @@ Enabling this setting will disable the server config GUI.</source>
         <source>Move the monitors so their interiors do not overlap. Touching edges are allowed.</source>
         <translation>请移动显示器，使内部区域不重叠。边缘可以相接。</translation>
     </message>
+    <message>
+        <source>When enabled, this canvas controls pointer directions and the computer grid is inactive. Devices without display information stay outside automatic switching. Disable this option to use the computer grid again; your monitor positions are kept. Saving here applies immediately.</source>
+        <translation>开启后，鼠标与方向快捷键均按此画布切换，旧电脑网格停用；暂时没有显示器信息的电脑不参与自动跨屏。关闭后使用整机网格，已摆放的显示器位置会保留。此处保存立即生效。</translation>
+    </message>
 </context>
 <context>
     <name>deskflow::workspace::FileTransferService</name>
@@ -1797,6 +1901,10 @@ Enabling this setting will disable the server config GUI.</source>
     <message>
         <source>Display layout was rejected; refresh the connected displays and try again.</source>
         <translation>布局未通过检查，请刷新已连接的显示器后重试。</translation>
+    </message>
+    <message>
+        <source>Layout is controlled by the server configuration file. Disable external configuration before editing displays.</source>
+        <translation>当前布局由服务端配置文件管理。请先关闭外部配置，再编辑显示器。</translation>
     </message>
 </context>
 <context>

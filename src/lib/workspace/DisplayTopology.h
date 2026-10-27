@@ -55,6 +55,9 @@ public:
   QJsonArray localDisplays() const;
   void setPeerDisplays(const QString &peer, const QJsonArray &displays);
   void removePeer(const QString &peer);
+  // Revoke live remote geometry while keeping the user's selected layout mode
+  // and saved placements. A service core can outlive its GUI provider.
+  void clearPeerDisplays();
   QJsonObject serializedState() const;
   QJsonObject layout() const;
   bool setLayout(const QJsonObject &layout, bool authoritative = false);
@@ -65,10 +68,12 @@ public:
   bool hasDevice(const QString &device) const;
   bool containsPoint(const QString &device, const QPoint &point) const;
   MotionResult routeMotion(const QString &device, const QPoint &from, const QPoint &to, int edgeZone = 0) const;
+  MotionResult routeInDirection(const QString &device, const QPoint &from, Edge edge) const;
 
   // Pure entry point for geometric and compatibility tests.
   static MotionResult
   route(const QJsonObject &state, const QString &device, const QPoint &from, const QPoint &to, int edgeZone = 0);
+  static MotionResult direction(const QJsonObject &state, const QString &device, const QPoint &from, Edge edge);
 
 Q_SIGNALS:
   void changed();
@@ -83,6 +88,7 @@ private:
   static std::shared_ptr<const Snapshot> makeSnapshot(const QJsonObject &state);
   static MotionResult
   routeSnapshot(const Snapshot &snapshot, const QString &device, const QPoint &from, const QPoint &to, int edgeZone);
+  static MotionResult directionSnapshot(const Snapshot &snapshot, const QString &device, const QPoint &from, Edge edge);
 
   QString m_localName;
   QJsonArray m_localDisplays;

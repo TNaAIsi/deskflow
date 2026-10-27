@@ -13,9 +13,13 @@
 #include "config/ServerConfig.h"
 
 #include <QDialog>
+#include <QJsonObject>
 
 class SettingsDialogButtonBox;
 class QItemSelection;
+class QLabel;
+class QListWidget;
+class QPushButton;
 
 namespace Ui {
 class ServerConfigDialog;
@@ -29,10 +33,14 @@ public:
   ServerConfigDialog(QWidget *parent, ServerConfig &config);
   ~ServerConfigDialog() override;
   bool addClient(const QString &clientName);
+  void setLayoutState(const QJsonObject &state);
   void message(const QString &message)
   {
     m_message = message;
   }
+
+Q_SIGNALS:
+  void displayLayoutRequested();
 
 protected:
   void onComputerRemoved();
@@ -98,6 +106,10 @@ private:
   bool isGeneralConfigModified() const;
   bool isGeneralConfigDefault() const;
   void setButtonBoxEnabledButtons() const;
+  void refreshLayoutControls() const;
+  void refreshRegisteredComputers();
+  void editRegisteredComputer();
+  void removeRegisteredComputer();
   std::unique_ptr<Ui::ServerConfigDialog> ui;
   QString m_message = "";
   int m_columns;
@@ -122,4 +134,12 @@ private:
   ServerConfig m_serverConfig;
   ComputerSetupModel m_computerSetupModel;
   SettingsDialogButtonBox *m_buttonBox = nullptr;
+  QJsonObject m_layoutState;
+  QLabel *m_layoutModeLabel = nullptr;
+  QPushButton *m_displayLayoutButton = nullptr;
+  QWidget *m_registeredComputersPanel = nullptr;
+  QListWidget *m_registeredComputers = nullptr;
+  QPushButton *m_addRegisteredComputer = nullptr;
+  QPushButton *m_editRegisteredComputer = nullptr;
+  QPushButton *m_removeRegisteredComputer = nullptr;
 };

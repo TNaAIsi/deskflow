@@ -45,7 +45,7 @@ class DisplayTopologyTests : public QObject
   Q_OBJECT
 
 private Q_SLOTS:
-  void legacyAndUnknownDevicesFallBack();
+  void onlyExplicitLegacyModeFallsBack();
   void interleavedComputersUseInternalMonitorSeams();
   void primaryStopsAtLastPixel();
   void partialEdgesRespectPhysicalPlacement();
@@ -59,15 +59,24 @@ private Q_SLOTS:
   void overlappingCanvasRejected();
   void authoritativeLayoutIncludesIndirectPeers();
   void snapshotRevisionTracksCommittedTopology();
+  void missingPeerDoesNotDisableKnownRoutes();
+  void providerLossPreservesModeButRevokesRemoteGeometry();
+  void directionalSwitchesUseMonitorPlacement();
+  void directionalSwitchesWalkLocalMonitorChain();
+  void directionalSwitchesRespectGapsAndOfflinePeers();
 };
 
-void DisplayTopologyTests::legacyAndUnknownDevicesFallBack()
+void DisplayTopologyTests::onlyExplicitLegacyModeFallsBack()
 {
   auto state = interleaved();
   state["enabled"] = false;
   QVERIFY(!DisplayTopology::route(state, "Windows", {1910, 500}, {1930, 500}).handled);
   state["enabled"] = true;
-  QVERIFY(!DisplayTopology::route(state, "Legacy Linux", {1910, 500}, {1930, 500}).handled);
+  const auto unknown = DisplayTopology::route(state, "Legacy Linux", {1910, 500}, {1930, 500});
+  QVERIFY(unknown.handled);
+  QVERIFY(!unknown.crossed);
+  QVERIFY(!unknown.sourceRect.isValid());
+  QCOMPARE(unknown.targetDevice, QString("Legacy Linux"));
 }
 
 void DisplayTopologyTests::interleavedComputersUseInternalMonitorSeams()
@@ -192,7 +201,13 @@ void DisplayTopologyTests::disconnectedDisplaysAreNotDestinations()
   auto result = DisplayTopology::route(state, "Windows", {1910, 500}, {1930, 500});
   QVERIFY(result.handled);
   QVERIFY(!result.crossed);
-  QVERIFY(!DisplayTopology::route(state, "Mac", {-10, 500}, {3, 500}).handled);
+  // Revoking the intervening Mac must not trap the physical Windows pointer
+  // before its second, still-connected native monitor.
+  QCOMPARE(result.point, QPoint(1930, 500));
+  const auto unavailable = DisplayTopology::route(state, "Mac", {-10, 500}, {3, 500});
+  QVERIFY(unavailable.handled);
+  QVERIFY(!unavailable.crossed);
+  QVERIFY(!unavailable.sourceRect.isValid());
 }
 
 void DisplayTopologyTests::invalidConfigurationDoesNotReplaceLayout()
@@ -264,6 +279,119 @@ void DisplayTopologyTests::snapshotRevisionTracksCommittedTopology()
   topology.removePeer("Mac");
   QVERIFY(topology.revision() > committed);
   QVERIFY(!topology.hasDevice("Mac"));
+}
+
+void DisplayTopologyTests::missingPeerDoesNotDisableKnownRoutes()
+{
+  auto &topology = DisplayTopology::instance();
+  topology.initialize("Local test endpoint");
+  QVERIFY(topology.setLayout(interleaved(), true));
+  topology.setPeerDisplays("Legacy Linux", {});
+  QVERIFY(!topology.hasDevice("Legacy Linux"));
+  const auto known = topology.routeMotion("Windows", {1910, 500}, {1930, 500});
+  QVERIFY(known.crossed);
+  QCOMPARE(known.targetDevice, QString("Mac"));
+  const auto unknown = topology.routeMotion("Legacy Linux", {1910, 500}, {1930, 500});
+  QVERIFY(unknown.handled);
+  QVERIFY(!unknown.crossed);
+}
+
+void DisplayTopologyTests::providerLossPreservesModeButRevokesRemoteGeometry()
+{
+  auto &topology = DisplayTopology::instance();
+  topology.initialize("Local test endpoint");
+  QVERIFY(topology.setLayout(interleaved(), true));
+  const auto before = topology.revision();
+  topology.clearPeerDisplays();
+  QVERIFY(topology.enabled());
+  QVERIFY(topology.revision() > before);
+  QVERIFY(!topology.hasDevice("Windows"));
+  QVERIFY(!topology.hasDevice("Mac"));
+  const auto motion = topology.routeMotion("Windows", {1910, 500}, {1930, 500});
+  QVERIFY(motion.handled);
+  QVERIFY(!motion.crossed);
+  QVERIFY(!motion.sourceRect.isValid());
+  QVERIFY(!topology.routeInDirection("Windows", {100, 500}, DisplayTopology::Edge::Right).crossed);
+  bool savedMac = false;
+  for (const auto &value : topology.layout().value("displays").toArray()) {
+    const auto object = value.toObject();
+    if (object.value("device").toString() == "Mac") {
+      savedMac = true;
+      QVERIFY(!object.value("connected").toBool());
+      QCOMPARE(object.value("canvas").toObject(), rectangle(1920, 0, 1440, 900));
+    }
+  }
+  QVERIFY(savedMac);
+  // The authenticated provider can restore the same selected arrangement.
+  QVERIFY(topology.setLayout(interleaved(), true));
+  QVERIFY(topology.routeMotion("Windows", {1910, 500}, {1930, 500}).crossed);
+  auto classic = interleaved();
+  classic["enabled"] = false;
+  QVERIFY(topology.setLayout(classic, true));
+  QVERIFY(!topology.routeMotion("Windows", {1910, 500}, {1930, 500}).handled);
+}
+
+void DisplayTopologyTests::directionalSwitchesUseMonitorPlacement()
+{
+  using Edge = DisplayTopology::Edge;
+  const auto state = interleaved();
+  auto result = DisplayTopology::direction(state, "Windows", {500, 500}, Edge::Right);
+  QVERIFY(result.crossed);
+  QCOMPARE(result.targetDevice, QString("Mac"));
+  QCOMPARE(result.targetDisplay, QString("m1"));
+  QCOMPARE(result.point.x(), -1438);
+  result = DisplayTopology::direction(state, "Mac", {-1000, 500}, Edge::Right);
+  QVERIFY(result.crossed);
+  QCOMPARE(result.targetDevice, QString("Windows"));
+  QCOMPARE(result.targetDisplay, QString("w2"));
+  QCOMPARE(result.point.x(), 1922);
+  result = DisplayTopology::direction(state, "Windows", {2000, 500}, Edge::Left);
+  QVERIFY(result.crossed);
+  QCOMPARE(result.targetDevice, QString("Mac"));
+  QVERIFY(!DisplayTopology::direction(state, "Windows", {500, 500}, Edge::Top).crossed);
+}
+
+void DisplayTopologyTests::directionalSwitchesWalkLocalMonitorChain()
+{
+  const QJsonObject state{
+      {"enabled", true},
+      {"displays", QJsonArray{
+                       display("Windows", "w1", rectangle(0, 0, 1920, 1080), rectangle(0, 0, 1920, 1080)),
+                       display("Windows", "w2", rectangle(-1920, 0, 1920, 1080), rectangle(1920, 0, 1920, 1080)),
+                       display("Mac", "m", rectangle(0, 0, 1440, 900), rectangle(3840, 0, 1440, 900))
+                   }}
+  };
+  const auto result = DisplayTopology::direction(state, "Windows", {100, 400}, DisplayTopology::Edge::Right);
+  QVERIFY(result.crossed);
+  QCOMPARE(result.targetDevice, QString("Mac"));
+  QCOMPARE(result.point.x(), 2);
+  QVERIFY(qAbs(result.point.y() - 400) <= 2);
+}
+
+void DisplayTopologyTests::directionalSwitchesRespectGapsAndOfflinePeers()
+{
+  using Edge = DisplayTopology::Edge;
+  const QJsonObject state{
+      {"enabled", true},
+      {"displays", QJsonArray{
+                       display("Windows", "w", rectangle(0, 0, 1920, 1080), rectangle(0, 0, 1920, 1080)),
+                       display("Mac", "m", rectangle(0, 0, 1440, 900), rectangle(1920, 300, 1440, 900))
+                   }}
+  };
+  QVERIFY(!DisplayTopology::direction(state, "Windows", {100, 100}, Edge::Right).crossed);
+  QVERIFY(DisplayTopology::direction(state, "Windows", {100, 700}, Edge::Right).crossed);
+  auto disconnected = state;
+  auto displays = disconnected.value("displays").toArray();
+  auto mac = displays.at(1).toObject();
+  mac["connected"] = false;
+  displays[1] = mac;
+  disconnected["displays"] = displays;
+  const auto missing = DisplayTopology::direction(disconnected, "Windows", {100, 700}, Edge::Right);
+  QVERIFY(missing.handled);
+  QVERIFY(!missing.crossed);
+  QVERIFY(DisplayTopology::direction(disconnected, "Legacy Linux", {100, 700}, Edge::Right).handled);
+  disconnected["enabled"] = false;
+  QVERIFY(!DisplayTopology::direction(disconnected, "Windows", {100, 700}, Edge::Right).handled);
 }
 
 QTEST_GUILESS_MAIN(DisplayTopologyTests)

@@ -17,9 +17,16 @@
 #include "dialogs/ComputerSettingsDialog.h"
 #include "dialogs/HotkeyDialog.h"
 #include "gui/widgets/SettingsDialogButtonBox.h"
+#include "workspace/DisplayTopology.h"
 
 #include <QFileDialog>
+#include <QJsonDocument>
+#include <QLabel>
+#include <QListWidget>
 #include <QMessageBox>
+#include <QPushButton>
+#include <QSignalBlocker>
+#include <QVBoxLayout>
 
 using enum ComputerConfig::SwitchCorner;
 
@@ -39,6 +46,61 @@ ServerConfigDialog::ServerConfigDialog(QWidget *parent, ServerConfig &config)
   ui->tabWidget->setCurrentIndex(0);
   layout()->addWidget(m_buttonBox);
 
+  auto *computersLayout = qobject_cast<QVBoxLayout *>(ui->tabComputers->layout());
+  auto *layoutPanel = new QWidget(ui->tabComputers);
+  auto *layoutPanelLayout = new QVBoxLayout(layoutPanel);
+  layoutPanelLayout->setContentsMargins(0, 0, 0, 0);
+  m_layoutModeLabel = new QLabel(layoutPanel);
+  m_layoutModeLabel->setObjectName("layoutModeLabel");
+  m_layoutModeLabel->setWordWrap(true);
+  layoutPanelLayout->addWidget(m_layoutModeLabel);
+  m_displayLayoutButton = new QPushButton(tr("Display layout…"), layoutPanel);
+  m_displayLayoutButton->setObjectName("displayLayoutButton");
+  m_displayLayoutButton->setAutoDefault(false);
+  layoutPanelLayout->addWidget(m_displayLayoutButton);
+  auto *layoutScope = new QLabel(
+      tr("Display layout has its own Save button. Saving or cancelling server settings does not undo saved display "
+         "positions."),
+      layoutPanel
+  );
+  layoutScope->setObjectName("displayLayoutScope");
+  layoutScope->setWordWrap(true);
+  layoutPanelLayout->addWidget(layoutScope);
+  computersLayout->insertWidget(0, layoutPanel);
+
+  m_registeredComputersPanel = new QWidget(ui->tabComputers);
+  m_registeredComputersPanel->setObjectName("registeredComputersPanel");
+  auto *registeredLayout = new QVBoxLayout(m_registeredComputersPanel);
+  registeredLayout->setContentsMargins(0, 0, 0, 0);
+  auto *registeredHelp = new QLabel(
+      tr("Registered computers and keyboard settings. This list does not set display positions."),
+      m_registeredComputersPanel
+  );
+  registeredHelp->setWordWrap(true);
+  registeredLayout->addWidget(registeredHelp);
+  m_registeredComputers = new QListWidget(m_registeredComputersPanel);
+  m_registeredComputers->setObjectName("registeredComputers");
+  registeredLayout->addWidget(m_registeredComputers, 1);
+  auto *registeredButtons = new QHBoxLayout;
+  m_addRegisteredComputer = new QPushButton(tr("Add computer…"), m_registeredComputersPanel);
+  m_addRegisteredComputer->setObjectName("addRegisteredComputer");
+  m_editRegisteredComputer = new QPushButton(tr("Edit computer…"), m_registeredComputersPanel);
+  m_editRegisteredComputer->setObjectName("editRegisteredComputer");
+  m_removeRegisteredComputer = new QPushButton(tr("Remove computer"), m_registeredComputersPanel);
+  m_removeRegisteredComputer->setObjectName("removeRegisteredComputer");
+  for (auto *button : {m_addRegisteredComputer, m_editRegisteredComputer, m_removeRegisteredComputer}) {
+    button->setAutoDefault(false);
+    registeredButtons->addWidget(button);
+  }
+  registeredButtons->addStretch();
+  registeredLayout->addLayout(registeredButtons);
+  computersLayout->addWidget(m_registeredComputersPanel, 1);
+
+  auto topology = deskflow::workspace::DisplayTopology::instance().serializedState();
+  if (topology.isEmpty())
+    topology = QJsonDocument::fromJson(Settings::value(Settings::Workspace::Layout).toString().toUtf8()).object();
+  m_layoutState = {{"topology", topology}};
+
   loadFromConfig();
 
   ui->lblRemoveComputer->setPixmap(QIcon::fromTheme("user-trash").pixmap(QSize(64, 64)));
@@ -51,6 +113,7 @@ ServerConfigDialog::ServerConfigDialog(QWidget *parent, ServerConfig &config)
     ui->cbPreventFullscreenSwitch->setVisible(false);
   }
   initConnections();
+  refreshRegisteredComputers();
 }
 
 ServerConfigDialog::~ServerConfigDialog() = default;
@@ -58,6 +121,108 @@ ServerConfigDialog::~ServerConfigDialog() = default;
 bool ServerConfigDialog::addClient(const QString &clientName)
 {
   return addComputer(clientName, true);
+}
+
+void ServerConfigDialog::setLayoutState(const QJsonObject &state)
+{
+  m_layoutState = state;
+  refreshLayoutControls();
+}
+
+void ServerConfigDialog::refreshLayoutControls() const
+{
+  const bool external = ui->groupExternalConfig->isChecked();
+  const auto mode = m_layoutState.value("layoutMode").toString();
+  const bool monitors =
+      !external &&
+      (mode == "monitors" || (mode.isEmpty() && m_layoutState.value("topology").toObject().value("enabled").toBool()));
+  if (external) {
+    m_layoutModeLabel->setText(
+        tr("External configuration file controls computer links. Turn off external configuration and save server "
+           "settings before arranging displays here.")
+    );
+  } else if (monitors) {
+    m_layoutModeLabel->setText(
+        tr("Independent monitor layout. Computer positions are edited in Display layout; the list manages computer "
+           "identity and keyboard settings.")
+    );
+  } else {
+    m_layoutModeLabel->setText(
+        tr("Compatibility computer layout is selected. Each computer is one block in the grid below. Use Display "
+           "layout to arrange individual monitors instead.")
+    );
+  }
+  ui->computerSetupView->setVisible(!monitors && !external);
+  ui->lblRemoveComputer->setVisible(!monitors && !external);
+  ui->lblNewComputer->setVisible(!monitors && !external);
+  ui->label_2->setVisible(!monitors && !external);
+  ui->label_2->setText(tr("Compatibility layout: drag whole computers to set their crossing directions."));
+  m_registeredComputersPanel->setVisible(monitors);
+
+  const bool changedComputers = !(m_originalServerConfig == m_serverConfig);
+  const bool changedExternal = external != m_originalServerConfigIsExternal ||
+                               ui->lineConfigFile->text() != m_originalServerConfigUsesExternalFile;
+  m_displayLayoutButton->setEnabled(Settings::isWritable() && !external && !changedComputers && !changedExternal);
+  m_displayLayoutButton->setToolTip(
+      changedComputers || changedExternal ? tr("Save computer changes before arranging displays.") : QString()
+  );
+
+  const auto *selected = m_registeredComputers->currentItem();
+  const int selectedIndex = selected ? selected->data(Qt::UserRole).toInt() : -1;
+  const bool validSelection = selectedIndex >= 0 && selectedIndex < m_serverConfig.computers().size();
+  const bool writable = Settings::isWritable() && !external;
+  m_addRegisteredComputer->setEnabled(writable && !m_computerSetupModel.isFull());
+  m_editRegisteredComputer->setEnabled(writable && validSelection);
+  m_removeRegisteredComputer->setEnabled(
+      writable && validSelection && !m_serverConfig.computers().at(selectedIndex).isServer() &&
+      m_serverConfig.computers().at(selectedIndex).name() != m_serverConfig.getServerName()
+  );
+}
+
+void ServerConfigDialog::refreshRegisteredComputers()
+{
+  const auto *selected = m_registeredComputers->currentItem();
+  const int selectedIndex = selected ? selected->data(Qt::UserRole).toInt() : -1;
+  const QSignalBlocker blocker(m_registeredComputers);
+  m_registeredComputers->clear();
+  const auto &computers = m_serverConfig.computers();
+  for (int index = 0; index < computers.size(); index++) {
+    const auto &computer = computers.at(index);
+    if (computer.isNull())
+      continue;
+    auto *item = new QListWidgetItem(
+        computer.isServer() ? tr("%1 (server)").arg(computer.name()) : computer.name(), m_registeredComputers
+    );
+    item->setData(Qt::UserRole, index);
+    item->setToolTip(computer.aliases().isEmpty() ? QString() : tr("Aliases: %1").arg(computer.aliases().join(", ")));
+    if (index == selectedIndex)
+      m_registeredComputers->setCurrentItem(item);
+  }
+  if (!m_registeredComputers->currentItem() && m_registeredComputers->count() > 0)
+    m_registeredComputers->setCurrentRow(0);
+  refreshLayoutControls();
+}
+
+void ServerConfigDialog::editRegisteredComputer()
+{
+  if (!m_editRegisteredComputer->isEnabled() || !m_registeredComputers->currentItem())
+    return;
+  const auto index = m_registeredComputers->currentItem()->data(Qt::UserRole).toInt();
+  auto edited = m_serverConfig.computers().at(index);
+  ComputerSettingsDialog dialog(this, &edited, &m_serverConfig.computers());
+  if (dialog.exec() != QDialog::Accepted)
+    return;
+  m_serverConfig.computers()[index] = edited;
+  Q_EMIT m_computerSetupModel.computersChanged();
+}
+
+void ServerConfigDialog::removeRegisteredComputer()
+{
+  if (!m_removeRegisteredComputer->isEnabled() || !m_registeredComputers->currentItem())
+    return;
+  const auto index = m_registeredComputers->currentItem()->data(Qt::UserRole).toInt();
+  m_serverConfig.computers()[index] = Computer();
+  Q_EMIT m_computerSetupModel.computersChanged();
 }
 
 void ServerConfigDialog::save()
@@ -112,8 +277,6 @@ void ServerConfigDialog::save()
 
 void ServerConfigDialog::cancel()
 {
-  serverConfig().setUseExternalConfig(m_originalServerConfigIsExternal);
-  serverConfig().setConfigFile(m_originalServerConfigUsesExternalFile);
   QDialog::reject();
 }
 
@@ -370,9 +533,8 @@ void ServerConfigDialog::onComputerRemoved()
 void ServerConfigDialog::toggleExternalConfig(bool checked)
 {
   ui->widgetExternalConfigControls->setEnabled(checked);
-  ui->tabWidget->setTabEnabled(0, !checked);
+  ui->tabWidget->setTabEnabled(0, true);
   ui->tabWidget->setTabEnabled(1, !checked);
-  serverConfig().setUseExternalConfig(checked);
   setButtonBoxEnabledButtons();
 }
 
@@ -434,14 +596,13 @@ void ServerConfigDialog::loadFromConfig()
   } else {
     server->markAsServer();
   }
+  refreshRegisteredComputers();
   updateControls();
 }
 
 void ServerConfigDialog::resetFromSettings()
 {
   m_serverConfig = m_originalServerConfig;
-  m_serverConfig.setConfigFile(m_originalServerConfigUsesExternalFile);
-  m_serverConfig.setUseExternalConfig(m_originalServerConfigIsExternal);
   loadFromConfig();
   if (ui->tabWidget->currentWidget() == ui->tabComputers) {
     ui->computerSetupView->reset();
@@ -480,6 +641,12 @@ void ServerConfigDialog::initConnections() const
   connect(m_buttonBox, &SettingsDialogButtonBox::rejected, this, &ServerConfigDialog::cancel);
   connect(m_buttonBox, &SettingsDialogButtonBox::reset, this, &ServerConfigDialog::resetFromSettings);
   connect(m_buttonBox, &SettingsDialogButtonBox::restoreDefault, this, &ServerConfigDialog::restoreFromDefaults);
+  connect(m_displayLayoutButton, &QPushButton::clicked, this, &ServerConfigDialog::displayLayoutRequested);
+  connect(m_addRegisteredComputer, &QPushButton::clicked, this, qOverload<>(&ServerConfigDialog::addClient));
+  connect(m_editRegisteredComputer, &QPushButton::clicked, this, &ServerConfigDialog::editRegisteredComputer);
+  connect(m_removeRegisteredComputer, &QPushButton::clicked, this, &ServerConfigDialog::removeRegisteredComputer);
+  connect(m_registeredComputers, &QListWidget::currentRowChanged, this, [this] { refreshLayoutControls(); });
+  connect(m_registeredComputers, &QListWidget::itemDoubleClicked, this, &ServerConfigDialog::editRegisteredComputer);
   connect(ui->tabWidget, &QTabWidget::currentChanged, this, &ServerConfigDialog::setButtonBoxEnabledButtons);
   connect(ui->lblRemoveComputer, &RemoveComputerWidget::computerRemoved, this, &ServerConfigDialog::onComputerRemoved);
   connect(ui->btnNewHotkey, &QPushButton::clicked, this, &ServerConfigDialog::addHotkey);
@@ -529,6 +696,10 @@ void ServerConfigDialog::initConnections() const
   connect(
       &m_computerSetupModel, &ComputerSetupModel::computersChanged, this,
       &ServerConfigDialog::setButtonBoxEnabledButtons
+  );
+  connect(
+      &m_computerSetupModel, &ComputerSetupModel::computersChanged, this,
+      &ServerConfigDialog::refreshRegisteredComputers
   );
   connect(Settings::instance(), &Settings::settingsWritableChanged, this, &ServerConfigDialog::updateControls);
 }
@@ -585,7 +756,6 @@ void ServerConfigDialog::setServerConfig()
     m_buttonBox->enableSave(false);
     return;
   }
-  serverConfig().setConfigFile(configFile);
   setButtonBoxEnabledButtons();
 }
 
@@ -606,8 +776,8 @@ bool ServerConfigDialog::addComputer(const QString &clientName, bool doSilent)
 
 bool ServerConfigDialog::isGeneralConfigModified() const
 {
-  return m_originalServerConfigIsExternal != Settings::value(Settings::Server::ExternalConfig).toBool() ||
-         m_originalServerConfigUsesExternalFile != Settings::value(Settings::Server::ExternalConfigFile).toString() ||
+  return m_originalServerConfigIsExternal != ui->groupExternalConfig->isChecked() ||
+         m_originalServerConfigUsesExternalFile != ui->lineConfigFile->text() ||
          m_protocol != Settings::networkProtocol() ||
          m_enableClipboard != Settings::value(Settings::Server::EnableClipboard).toBool() ||
          m_clipboardSize != Settings::value(Settings::Server::ClipboardSize).toUInt() ||
@@ -650,4 +820,5 @@ void ServerConfigDialog::setButtonBoxEnabledButtons() const
   m_buttonBox->enableSave(writable && (isGeneralConfigModified() || !(m_originalServerConfig == m_serverConfig)));
   m_buttonBox->enableReset(writable && (isGeneralConfigModified() || !(m_originalServerConfig == m_serverConfig)));
   m_buttonBox->enableRestoreDefaults(writable && !isGeneralConfigDefault() && ui->tabWidget->currentIndex() == 2);
+  refreshLayoutControls();
 }

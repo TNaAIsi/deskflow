@@ -17,6 +17,8 @@
 #include "deskflow/MouseTypes.h"
 #include "server/Config.h"
 
+#include <QMetaObject>
+
 #include <climits>
 #include <map>
 #include <set>
@@ -220,7 +222,7 @@ private:
   bool isAutomaticSwitchBlocked() const;
 
   // Handle physical monitor edges using the workspace topology. Returns false
-  // when the connected device still uses the legacy whole-desktop model.
+  // only when the user selected the legacy/external whole-desktop model.
   bool routeDisplayMotion(int32_t oldX, int32_t oldY, int32_t x, int32_t y, bool primary);
 
   // returns the jump zone of the client
@@ -262,7 +264,10 @@ private:
   // test if a switch is permitted.  this includes testing user
   // options like switch delay and tracking any state required to
   // implement them.  returns true iff a switch is permitted.
-  bool isSwitchOkay(BaseClientProxy *dst, Direction, int32_t x, int32_t y, int32_t xActive, int32_t yActive);
+  bool isSwitchOkay(
+      BaseClientProxy *dst, Direction, int32_t x, int32_t y, int32_t xActive, int32_t yActive,
+      bool automaticPolicyChecked = false
+  );
 
   // update switch state due to a mouse move at \p x, \p y that
   // doesn't switch computers.
@@ -451,6 +456,7 @@ private:
   int32_t m_switchWaitX;
   int32_t m_switchWaitY;
   uint64_t m_switchTopologyRevision = 0;
+  QMetaObject::Connection m_topologyConnection;
 
   int32_t m_switchTwoTapZone = 3;
 
