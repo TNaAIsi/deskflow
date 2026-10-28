@@ -35,6 +35,7 @@
 #include <QTimer>
 
 #ifdef Q_OS_MACOS
+#include <QSslSocket>
 #include <array>
 #include <libproc.h>
 #include <openssl/crypto.h>
@@ -108,9 +109,6 @@ int main(int argc, char **argv)
   qputenv("OPENSSL_ENGINES", "/var/empty");
   if (OPENSSL_init_crypto(OPENSSL_INIT_NO_LOAD_CONFIG, nullptr) != 1)
     return s_exitFailed;
-  // Qt networking uses Apple's TLS backend rather than resolving a separate
-  // libcrypto from a caller's machine. Deskflow's input TLS remains static.
-  qputenv("QT_TLS_BACKEND", "securetransport");
   qputenv("QT_QPA_PLATFORM", "cocoa");
   std::array<char, PROC_PIDPATHINFO_MAXSIZE> executable{};
   if (proc_pidpath(getpid(), executable.data(), uint32_t(executable.size())) <= 0)
@@ -121,6 +119,12 @@ int main(int argc, char **argv)
   int qtArgumentCount = 1;
   char *qtArguments[] = {argv[0], nullptr};
   QApplication app(qtArgumentCount, qtArguments);
+  // Qt networking uses Apple's TLS backend rather than resolving a separate
+  // libcrypto from a caller's machine. Deskflow's input TLS remains static.
+  if (!QSslSocket::setActiveBackend(QStringLiteral("securetransport"))) {
+    QTextStream(stderr) << "The macOS system TLS backend is missing.\n";
+    return s_exitFailed;
+  }
 #else
   QApplication app(argc, argv);
 #endif
