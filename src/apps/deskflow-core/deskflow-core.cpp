@@ -37,6 +37,7 @@
 #ifdef Q_OS_MACOS
 #include <array>
 #include <libproc.h>
+#include <openssl/crypto.h>
 #include <unistd.h>
 #endif
 
@@ -98,6 +99,18 @@ int main(int argc, char **argv)
   for (const auto &name : environment.keys())
     if (name.startsWith("QT_") || name.startsWith("QML_") || name.startsWith("QML2_") || name.startsWith("QTWEBENGINE"))
       qunsetenv(name.toLocal8Bit().constData());
+  // OpenSSL configuration can load providers/engines into this authorized
+  // process. Ignore both caller overrides and a user-writable default config,
+  // including a separate OpenSSL copy that a Qt TLS backend might initialize.
+  qputenv("OPENSSL_CONF", "");
+  qputenv("OPENSSL_CONF_INCLUDE", "/var/empty");
+  qputenv("OPENSSL_MODULES", "/var/empty");
+  qputenv("OPENSSL_ENGINES", "/var/empty");
+  if (OPENSSL_init_crypto(OPENSSL_INIT_NO_LOAD_CONFIG, nullptr) != 1)
+    return s_exitFailed;
+  // Qt networking uses Apple's TLS backend rather than resolving a separate
+  // libcrypto from a caller's machine. Deskflow's input TLS remains static.
+  qputenv("QT_TLS_BACKEND", "securetransport");
   qputenv("QT_QPA_PLATFORM", "cocoa");
   std::array<char, PROC_PIDPATHINFO_MAXSIZE> executable{};
   if (proc_pidpath(getpid(), executable.data(), uint32_t(executable.size())) <= 0)

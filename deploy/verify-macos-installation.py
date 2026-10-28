@@ -22,6 +22,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--package", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--openssl-control")
     args = parser.parse_args()
     if os.environ.get("GITHUB_ACTIONS") != "true":
         raise RuntimeError("Installation checks are restricted to disposable GitHub Actions runners")
@@ -62,7 +63,10 @@ def main():
         report["root_owned_dependencies"] = True
         report["manifest_identity"] = "verified"
         validation = output.with_name("installed-macos-bundle-validation.json")
-        run("python3", "deploy/verify-macos-bundle.py", "--app", str(application), "--output", str(validation))
+        command = ["python3", "deploy/verify-macos-bundle.py", "--app", str(application), "--output", str(validation)]
+        if args.openssl_control:
+            command += ["--openssl-control", args.openssl_control]
+        run(*command)
         after = run("/usr/bin/systemextensionsctl", "list")
         if before != after:
             raise RuntimeError("The installer unexpectedly activated or changed a system extension")

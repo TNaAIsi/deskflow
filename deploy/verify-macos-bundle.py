@@ -19,11 +19,44 @@ def run(arguments, **kwargs):
     return result.stdout
 
 
+def verify_crypto_environment(binary, temporary, environment, openssl):
+    root = Path(temporary)
+    marker = root / "external-provider-loaded"
+    source = root / "provider-probe.c"
+    module = root / "provider-probe.dylib"
+    source.write_text('#include <stdio.h>\n#include <stdlib.h>\n'
+                      '__attribute__((constructor)) static void probe(void) {\n'
+                      ' const char *path = getenv("DESKFLOW_PROVIDER_TEST_MARKER");\n'
+                      ' if (path) { FILE *file = fopen(path, "w"); if (file) fclose(file); }\n}\n'
+                      'int OSSL_provider_init(void *a, void *b, void *c, void *d) { return 0; }\n')
+    run(["/usr/bin/clang", "-dynamiclib", str(source), "-o", str(module)])
+    run(["/usr/bin/codesign", "--force", "--sign", "-", str(module)])
+    configuration = root / "external-openssl.cnf"
+    configuration.write_text('openssl_conf = initialization\n[initialization]\nproviders = providers\n'
+                             '[providers]\ndefault = builtin\nprobe = external\n[builtin]\nactivate = 1\n'
+                             f'[external]\nmodule = {module}\nactivate = 1\n')
+    poisoned = environment.copy()
+    poisoned.update({"OPENSSL_CONF": str(configuration), "OPENSSL_CONF_INCLUDE": str(root),
+                     "OPENSSL_MODULES": str(root), "OPENSSL_ENGINES": str(root),
+                     "DESKFLOW_PROVIDER_TEST_MARKER": str(marker)})
+    # A harmless module constructor proves that this test configuration really
+    # reaches OpenSSL's loader; the authorized input core must ignore it.
+    subprocess.run([openssl, "list", "-providers"], env=poisoned, check=False,
+                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=15)
+    if not marker.exists():
+        raise RuntimeError("The OpenSSL module isolation control did not load its harmless probe")
+    marker.unlink()
+    run([str(binary), "--version"], env=poisoned)
+    if marker.exists():
+        raise RuntimeError("The authorized input core loaded an external OpenSSL configuration module")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--app")
     parser.add_argument("--find-in")
     parser.add_argument("--output", required=True)
+    parser.add_argument("--openssl-control")
     args = parser.parse_args()
     if args.app:
         app = Path(args.app).resolve()
@@ -97,6 +130,9 @@ def main():
         if expected_version not in isolated:
             raise RuntimeError("The hardened core failed its plugin-environment isolation check")
         report["native_keyboard"]["plugin_environment_isolated"] = True
+        if args.openssl_control:
+            verify_crypto_environment(app / "Contents/MacOS/deskflow-core", temporary, environment, args.openssl_control)
+            report["native_keyboard"]["crypto_environment_isolated"] = True
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
