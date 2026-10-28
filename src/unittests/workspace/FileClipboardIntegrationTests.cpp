@@ -9,6 +9,7 @@
 #include <QClipboard>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QMimeData>
 #include <QSignalBlocker>
@@ -250,7 +251,12 @@ private Q_SLOTS:
       cacheId = completed.value("cacheId").toString();
       receivedPath = completed.value("localPaths").toArray().first().toString();
       QVERIFY(!cacheId.isEmpty());
-      QCOMPARE(nativeClipboardFiles().paths, QStringList{receivedPath});
+      const auto nativePaths = nativeClipboardFiles().paths;
+      QCOMPARE(nativePaths.size(), 1);
+      QVERIFY(QFileInfo::exists(receivedPath));
+      // CF_HDROP uses native backslashes while the transfer journal uses Qt
+      // paths. Compare file identity without weakening the cache assertions.
+      QCOMPARE(QFileInfo(nativePaths.first()).canonicalFilePath(), QFileInfo(receivedPath).canonicalFilePath());
     }
     FileTransferService reopened(nullptr, receivedStore.path());
     reopened.refreshFileState();

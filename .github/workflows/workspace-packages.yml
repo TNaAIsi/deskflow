@@ -75,6 +75,7 @@ jobs:
             build/installed-macos-bundle-validation.json
             build/validation/ui/*.png
             build/src/unittests/Testing/Temporary/LastTest.log
+            build/src/unittests/**/*Tests.xml
           if-no-files-found: warn
 
   windows-x64:
@@ -175,4 +176,5 @@ jobs:
             build/windows-upgrade-runtime-validation.json
             build/*install*.log
             build/src/unittests/Testing/Temporary/LastTest.log
+            build/src/unittests/**/*Tests.xml
           if-no-files-found: warn
