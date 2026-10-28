@@ -16,6 +16,11 @@
 #include <QJsonObject>
 
 class SettingsDialogButtonBox;
+class SharingSettingsWidget;
+namespace deskflow::workspace {
+class DisplayLayoutWidget;
+class WorkspaceService;
+} // namespace deskflow::workspace
 class QItemSelection;
 class QLabel;
 class QListWidget;
@@ -34,13 +39,21 @@ public:
   ~ServerConfigDialog() override;
   bool addClient(const QString &clientName);
   void setLayoutState(const QJsonObject &state);
+  void setSharingService(deskflow::workspace::WorkspaceService *service);
+  void setSharingState(const QJsonObject &state);
+  bool requiresCoreRestart() const
+  {
+    return m_inputConfigChanged;
+  }
   void message(const QString &message)
   {
     m_message = message;
   }
 
 Q_SIGNALS:
-  void displayLayoutRequested();
+  void displayLayoutRequested(); // Kept for source compatibility; no separate editor is opened.
+  void displayLayoutSaved(const QJsonObject &layout);
+  void identifyDisplayRequested(const QString &device, const QString &id);
 
 protected:
   void onComputerRemoved();
@@ -110,6 +123,10 @@ private:
   void refreshRegisteredComputers();
   void editRegisteredComputer();
   void removeRegisteredComputer();
+  void addFullscreenGameProgram();
+  void removeFullscreenGameProgram();
+  void refreshFullscreenGamePrograms();
+  void updateGameProgramControls() const;
   std::unique_ptr<Ui::ServerConfigDialog> ui;
   QString m_message = "";
   int m_columns;
@@ -124,6 +141,7 @@ private:
   uint m_clipboardSize;
   bool m_relativeMouseMoves;
   bool m_preventFullscreenSwitch;
+  QStringList m_fullscreenGamePrograms;
   bool m_enableSwitchDelay;
   bool m_enableSwitchDoubleTap;
   bool m_originalServerConfigIsExternal;
@@ -136,10 +154,16 @@ private:
   SettingsDialogButtonBox *m_buttonBox = nullptr;
   QJsonObject m_layoutState;
   QLabel *m_layoutModeLabel = nullptr;
-  QPushButton *m_displayLayoutButton = nullptr;
+  deskflow::workspace::DisplayLayoutWidget *m_displayLayoutEditor = nullptr;
+  SharingSettingsWidget *m_sharingSettings = nullptr;
+  bool m_inputConfigChanged = false;
   QWidget *m_registeredComputersPanel = nullptr;
   QListWidget *m_registeredComputers = nullptr;
   QPushButton *m_addRegisteredComputer = nullptr;
   QPushButton *m_editRegisteredComputer = nullptr;
   QPushButton *m_removeRegisteredComputer = nullptr;
+  QWidget *m_gameProgramsPanel = nullptr;
+  QListWidget *m_gamePrograms = nullptr;
+  QPushButton *m_addGameProgram = nullptr;
+  QPushButton *m_removeGameProgram = nullptr;
 };

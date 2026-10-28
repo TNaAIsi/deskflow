@@ -12,6 +12,7 @@
 #include "platform/MSWindowsHook.h"
 #include "platform/MSWindowsPowerManager.h"
 
+#include <QStringList>
 #include <map>
 #include <string>
 
@@ -259,6 +260,12 @@ private:
 
   // true if the computer is enabled
   bool m_isEnabled = false;
+
+  QStringList m_fullscreenGamePrograms;
+  mutable HWND m_gameProgramWindow = nullptr;
+  mutable DWORD m_gameProgramProcess = 0;
+  mutable ULONGLONG m_gameProgramChecked = 0;
+  mutable bool m_gameProgramMatched = false;
 
   // our resources
   ATOM m_class = 0;

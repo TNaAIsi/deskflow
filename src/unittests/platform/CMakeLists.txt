@@ -1,6 +1,16 @@
 # SPDX-FileCopyrightText: (C) 2025 Deskflow Developers
 # SPDX-License-Identifier: MIT
 
+create_test(
+  NAME NativeKeyboardProtocolTests
+  DEPENDS platform
+  SOURCE NativeKeyboardProtocolTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/platform"
+)
+if(APPLE)
+  add_test(NAME NativeKeyboardBridgeSelfTest COMMAND $<TARGET_FILE:deskflow-hid-bridge> --self-test)
+endif()
+
 if (WIN32)
   create_test(
     NAME MSWindowsClipboardTests

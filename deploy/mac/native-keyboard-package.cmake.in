@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: (C) 2026 Deskflow Developers
+# SPDX-License-Identifier: MIT
+execute_process(
+  COMMAND "@Python3_EXECUTABLE@" "@CMAKE_SOURCE_DIR@/deploy/mac/build-native-keyboard-package.py"
+    --bundle "${CMAKE_INSTALL_PREFIX}/Deskflow.app"
+    --source-root "@CMAKE_SOURCE_DIR@"
+    --version "@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@"
+    --identity "@_codesign_identity@"
+    --output-directory "@CMAKE_BINARY_DIR@"
+  RESULT_VARIABLE _native_package_result
+  TIMEOUT 300
+)
+if(NOT _native_package_result EQUAL 0)
+  message(FATAL_ERROR "Native keyboard component packaging failed: ${_native_package_result}")
+endif()

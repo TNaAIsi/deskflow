@@ -16,6 +16,27 @@
 #include <limits>
 
 namespace deskflow::workspace {
+namespace {
+QJsonObject storedOptions(bool *migrated = nullptr)
+{
+  auto result = WorkspaceService::defaultOptions();
+  const auto saved =
+      QJsonDocument::fromJson(Settings::value(Settings::Workspace::Options).toString().toUtf8()).object();
+  for (auto it = saved.begin(); it != saved.end(); ++it)
+    if (result.contains(it.key()))
+      result.insert(it.key(), it.value());
+  const bool disabled = !result.value("enabled").toBool(true);
+  if (disabled) {
+    result["enabled"] = true;
+    result["fileClipboard"] = false;
+    result["sendEnabled"] = false;
+    result["receiveEnabled"] = false;
+  }
+  if (migrated)
+    *migrated = disabled;
+  return result;
+}
+} // namespace
 
 QJsonObject WorkspaceService::defaultOptions()
 {
@@ -30,6 +51,7 @@ WorkspaceService::WorkspaceService(bool server, QObject *parent)
       m_files(new FileTransferService(this)),
       m_server(server)
 {
+  m_options = storedOptions();
   m_update.setSingleShot(true);
   m_update.setInterval(150);
   m_offerRetry.setInterval(25);
@@ -51,6 +73,7 @@ WorkspaceService::WorkspaceService(bool server, QObject *parent)
   connect(&m_transport, &WorkspaceTransport::error, this, &WorkspaceService::reportError);
   connect(m_audio, &AudioService::error, this, &WorkspaceService::reportError);
   connect(m_files, &FileTransferService::error, this, &WorkspaceService::reportError);
+  connect(m_files, &FileTransferService::fileStateChanged, this, &WorkspaceService::update);
   connect(m_audio, &AudioService::statusChanged, this, [this](const QString &status) {
     m_audioStatus = status;
     update();
@@ -78,21 +101,6 @@ WorkspaceService::WorkspaceService(bool server, QObject *parent)
     if (m_offers.size() >= 100)
       m_offers.remove(m_offers.begin().key());
     m_offers.insert(key, offer);
-    update();
-  });
-  connect(m_files, &FileTransferService::progressChanged, this, [this](const QJsonObject &progress) {
-    auto summary = progress;
-    const auto paths = progress.value("localPaths").toArray();
-    if (paths.size() > 8) {
-      QJsonArray preview;
-      for (qsizetype i = 0; i < 8; ++i)
-        preview.append(paths.at(i));
-      summary.insert("localPaths", preview);
-    }
-    const auto id = progress.value("peer").toString() + "/" + progress.value("id").toString();
-    if (m_transfers.size() >= 100 && !m_transfers.contains(id))
-      m_transfers.remove(m_transfers.begin().key());
-    m_transfers.insert(id, summary);
     update();
   });
   connect(&m_transport, &WorkspaceTransport::peerConnected, this, [this](const QString &peer) {
@@ -163,23 +171,27 @@ WorkspaceService::WorkspaceService(bool server, QObject *parent)
 
 void WorkspaceService::start()
 {
+  m_initialized = true;
   m_name = Settings::value(Settings::Core::ComputerName).toString();
   DisplayTopology::instance().initialize(m_name);
   const auto storedLayout = QJsonDocument::fromJson(Settings::value(Settings::Workspace::Layout).toString().toUtf8());
   if (storedLayout.isObject() && !storedLayout.object().isEmpty())
     DisplayTopology::instance().setLayout(storedLayout.object());
-  m_options = defaultOptions();
-  const auto stored =
-      QJsonDocument::fromJson(Settings::value(Settings::Workspace::Options).toString().toUtf8()).object();
-  for (auto it = stored.begin(); it != stored.end(); ++it)
-    if (m_options.contains(it.key()))
-      m_options.insert(it.key(), it.value());
+  bool migrated = false;
+  m_options = storedOptions(&migrated);
+  if (migrated) {
+    Settings::setValue(
+        Settings::Workspace::Options, QString::fromUtf8(QJsonDocument(m_options).toJson(QJsonDocument::Compact))
+    );
+    Settings::save(false);
+  }
   applyOptions();
 }
 
 WorkspaceService::~WorkspaceService()
 {
-  setWorkspaceResponsive(false);
+  if (m_initialized)
+    setWorkspaceResponsive(false);
   m_update.stop();
   m_offerRetry.stop();
   // Stop while all members and resource children are still alive. A transport
@@ -188,7 +200,8 @@ WorkspaceService::~WorkspaceService()
   disconnect(&m_transport, nullptr, this, nullptr);
   m_audio->stopCapture();
   m_audio->stopPlayback();
-  m_files->setClipboardEnabled(false);
+  if (m_initialized)
+    m_files->setClipboardEnabled(false);
 }
 
 void WorkspaceService::applyOptions()
@@ -330,7 +343,10 @@ void WorkspaceService::command(const QJsonObject &object)
         Settings::Workspace::Options, QString::fromUtf8(QJsonDocument(m_options).toJson(QJsonDocument::Compact))
     );
     Settings::save(false);
-    applyOptions();
+    if (m_initialized)
+      applyOptions();
+    else
+      update();
   } else if (action == "offer") {
     QStringList paths;
     for (const auto &path : object.value("paths").toArray())
@@ -346,6 +362,12 @@ void WorkspaceService::command(const QJsonObject &object)
     m_files->cancel(object.value("id").toString());
   } else if (action == "clearFileCache") {
     m_files->clearClipboardCache();
+  } else if (action == "removeFileCache" || action == "removeFileCacheEntry") {
+    m_files->removeClipboardCacheEntry(object.value("id").toString());
+  } else if (action == "clearFileHistory") {
+    m_files->clearTransferHistory();
+  } else if (action == "refreshFileState") {
+    m_files->refreshFileState();
   } else if (action == "layout") {
     const auto layout = object.value("layout").toObject();
     if (m_server)
@@ -383,9 +405,7 @@ QJsonObject WorkspaceService::layoutMessage() const
 
 QJsonObject WorkspaceService::state() const
 {
-  QJsonArray transfers, offers, errors;
-  for (const auto &value : m_transfers)
-    transfers.append(value);
+  QJsonArray offers, errors;
   for (const auto &value : m_offers)
     offers.append(value);
   for (const auto &message : m_errors)
@@ -401,7 +421,8 @@ QJsonObject WorkspaceService::state() const
       {"layoutMode", selectedLayoutMode()},
       {"audioDevices", AudioService::outputDevices()},
       {"audioStatus", m_audioStatus},
-      {"transfers", transfers},
+      {"transfers", m_files->history()},
+      {"fileCache", m_files->cacheState()},
       {"offers", offers},
       {"errors", errors}
   };

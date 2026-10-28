@@ -6,6 +6,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QObject>
 #include <QStringList>
@@ -24,7 +25,7 @@ class FileTransferService : public QObject
 public:
   using SendHandler = std::function<bool(const QString &, const QString &, const QJsonObject &, const QByteArray &)>;
 
-  explicit FileTransferService(QObject *parent = nullptr);
+  explicit FileTransferService(QObject *parent = nullptr, const QString &storageDirectory = {});
   ~FileTransferService() override;
 
   void setSendHandler(SendHandler handler);
@@ -32,6 +33,8 @@ public:
   void setAutomaticClipboardLimit(qint64 bytes);
   void peerConnected(const QString &peer);
   void peerDisconnected(const QString &peer);
+  QJsonArray history() const;
+  QJsonObject cacheState() const;
 
 public Q_SLOTS:
   void receiveMessage(const QString &peer, const QString &type, const QJsonObject &metadata, const QByteArray &payload);
@@ -40,12 +43,16 @@ public Q_SLOTS:
   void publishClipboardOffer(const QString &peer = QString());
   void cancel(const QString &id);
   void clearClipboardCache();
+  void removeClipboardCacheEntry(const QString &cacheId);
+  void clearTransferHistory();
+  void refreshFileState();
 
 Q_SIGNALS:
   void outbound(QString peer, QString type, QJsonObject metadata, QByteArray payload);
   void progressChanged(QJsonObject progress);
   void offerAvailable(QJsonObject offer);
   void error(QString message);
+  void fileStateChanged();
 
 private:
   class Private;
@@ -59,6 +66,9 @@ inline constexpr qint64 kChunkBytes = 64 * 1024;
 inline constexpr int kMaximumEntries = 4096;
 bool validRelativePath(const QString &path);
 QString availableName(const QString &directory, const QString &name);
+// Shared by cache statistics and deletion; protects clipboard references to an
+// entry, to a descendant, or to a parent directory that contains the entry.
+bool cacheEntryReferenced(const QString &directory, const QStringList &paths);
 } // namespace filetransfer
 
 } // namespace deskflow::workspace

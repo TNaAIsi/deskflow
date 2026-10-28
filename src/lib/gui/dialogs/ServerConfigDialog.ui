@@ -629,10 +629,10 @@
           <item>
            <widget class="QCheckBox" name="cbPreventFullscreenSwitch">
             <property name="toolTip">
-             <string>Keep the cursor on this Windows computer while its foreground window fills a monitor (including videos), or an application confines the cursor. Explicit switch hotkeys still work. This does not change manual cursor locking.</string>
+             <string>Automatically keep control on this Windows computer when a full-screen game captures the pointer or uses exclusive rendering. Add a game below if automatic detection misses it. Listed games still require full-screen mode. Full-screen display alone, or cursor capture in a windowed app, does not trigger protection. Explicit switch shortcuts still work.</string>
             </property>
             <property name="text">
-             <string>Keep cursor local during full-screen apps or capture</string>
+             <string>Keep keyboard and mouse here during full-screen games</string>
             </property>
            </widget>
           </item>

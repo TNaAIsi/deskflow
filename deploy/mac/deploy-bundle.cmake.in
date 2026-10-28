@@ -8,7 +8,9 @@ if(NOT _identity STREQUAL "-")
   list(APPEND _options -hardened-runtime -timestamp)
 endif()
 execute_process(
-  COMMAND "@DEPLOYQT@" "${_bundle}" ${_options} "-codesign=${_identity}"
+  COMMAND "@DEPLOYQT@" "${_bundle}" ${_options} -always-overwrite
+    "-executable=${_bundle}/Contents/MacOS/@CMAKE_PROJECT_NAME@-core"
+    "-codesign=${_identity}"
   RESULT_VARIABLE _deployment_result
 )
 if(NOT _deployment_result EQUAL 0)

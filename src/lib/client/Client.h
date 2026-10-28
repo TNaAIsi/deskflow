@@ -189,6 +189,7 @@ public:
   void resetOptions() override;
   void setOptions(const OptionsList &options) override;
   std::string getName() const override;
+  void releaseKeyboardState();
 
 private:
   void saveRelativeRestorePosition();

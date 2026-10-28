@@ -27,9 +27,14 @@ public:
     return enabled && onPrimary;
   }
 
-  static constexpr bool blocksAutomaticSwitch(bool fullscreen, bool cursorConfined)
+  static constexpr bool blocksAutomaticSwitch(
+      bool fullscreen, bool cursorConfined, bool exclusiveDirect3D = false, bool configuredGame = false
+  )
   {
-    return fullscreen || cursorConfined;
+    // Full-screen presentation alone is common in browsers and video players;
+    // cursor capture alone is also used by ordinary windowed applications.
+    // Require both full-screen geometry and evidence of game-style input.
+    return fullscreen && (cursorConfined || exclusiveDirect3D || configuredGame);
   }
 
   static constexpr bool coversMonitor(const Rect &window, const Rect &monitor, int32_t tolerance = 2)

@@ -8,10 +8,13 @@
 
 #include "../deskflow/MockEventQueue.h"
 #include "base/Event.h"
+#include "common/PhysicalKey.h"
 #include "deskflow/AppUtil.h"
+#include "deskflow/DeskflowException.h"
 #include "io/IStream.h"
 #include "server/ClientProxy1_0.h"
 #include "server/ClientProxy1_1.h"
+#include "server/ClientProxy1_10.h"
 #include "server/ClientProxy1_6.h"
 #include "server/ClientProxy1_7.h"
 #include "server/ClientProxy1_8.h"
@@ -146,6 +149,17 @@ public:
   {
     stream->push(QByteArray(1, static_cast<char>(ready)));
     return parseMessage(reinterpret_cast<const uint8_t *>(kMsgDAudioRTS));
+  }
+};
+
+class TestNativeProxy : public ClientProxy1_10
+{
+public:
+  using ClientProxy1_10::ClientProxy1_10;
+  bool ready(CapturingStream *stream, uint8_t ready)
+  {
+    stream->push(QByteArray(1, static_cast<char>(ready)));
+    return parseMessage(reinterpret_cast<const uint8_t *>(kMsgNativeKeyboardReady));
   }
 };
 
@@ -364,6 +378,87 @@ void ClientProxyTests::audio_unsolicitedReadyDoesNotStart()
   QCOMPARE(events.timersStarted, 0);
   QVERIFY(stream->take().isEmpty());
   QVERIFY(!proxy.ready(stream, 2));
+}
+
+void ClientProxyTests::nativeKeyboardNegotiatesExplicitlyAndSendsPhysicalUsages()
+{
+  AudioEventQueue events;
+  auto *stream = new CapturingStream;
+  int readinessChanges = 0;
+  TestNativeProxy proxy(
+      "client", stream, reinterpret_cast<Server *>(0x1), &events,
+      {true, [] { return uint8_t(0x42); }, [&] { ++readinessChanges; }}
+  );
+  QVERIFY(stream->take().endsWith(QByteArray("NKCP\1", 5)));
+  QVERIFY(!proxy.usesPhysicalKeyboard());
+  QVERIFY(proxy.ready(stream, 1));
+  QVERIFY(proxy.usesPhysicalKeyboard());
+  QVERIFY(stream->take().isEmpty()); // No Windows language sync in native mode.
+  proxy.enter(5, 6, 1, 0, false);
+  const auto entered = stream->take();
+  QVERIFY(entered.startsWith(QByteArray("NKEN\1\x42", 6)));
+  QVERIFY(entered.contains("CINN"));
+  const auto physicalQuote = deskflow::physicalkey::encode({7, 0x34});
+  // Deliberately inconsistent character and layout must not change the key.
+  proxy.keyDown('x', 0, physicalQuote, "fr");
+  QCOMPARE(stream->take(), QByteArray::fromHex("4e4b50440007003401"));
+  proxy.keyDown('z', 0, physicalQuote, "de");
+  proxy.keyRepeat('x', 0, 12, physicalQuote, "fr");
+  QVERIFY(stream->take().isEmpty());
+  proxy.keyUp('y', 0, physicalQuote);
+  QCOMPARE(stream->take(), QByteArray::fromHex("4e4b50440007003400"));
+  proxy.keyDown('c', KeyModifierControl, 0, "");
+  QCOMPARE(stream->take(), QByteArray::fromHex("4e4b534b00000063000201"));
+  proxy.keyUp('c', KeyModifierControl, 0);
+  QCOMPARE(stream->take(), QByteArray::fromHex("4e4b534b00000063000200"));
+  QVERIFY(proxy.leave());
+  QCOMPARE(stream->take(), QByteArray("NKEN\0\0COUT", 10));
+  QCOMPARE(readinessChanges, 0);
+}
+
+void ClientProxyTests::nativeKeyboardUnsupportedSourceKeepsLegacyWire()
+{
+  AudioEventQueue events;
+  auto *stream = new CapturingStream;
+  TestNativeProxy proxy(
+      "client", stream, reinterpret_cast<Server *>(0x1), &events, {false, [] { return uint8_t(0xff); }, [] {}}
+  );
+  QVERIFY(stream->take().endsWith(QByteArray("NKCP\0", 5)));
+  QVERIFY(proxy.ready(stream, 1));
+  QVERIFY(!proxy.usesPhysicalKeyboard());
+  QVERIFY(stream->take().startsWith("LSYN"));
+  proxy.enter(5, 6, 1, 0, false);
+  QVERIFY(stream->take().startsWith(QByteArray("NKEN\0\0", 6)));
+  proxy.keyDown('a', 0, 0x1e, "en");
+  const auto legacy = stream->take();
+  QVERIFY(legacy.startsWith("DKDL"));
+  QVERIFY(!legacy.contains("NKPD"));
+  QVERIFY_THROWS_EXCEPTION(BadClientException, proxy.ready(stream, 2));
+}
+
+void ClientProxyTests::nativeKeyboardBroadcastCompatibilityCanRestoreNativeSession()
+{
+  AudioEventQueue events;
+  auto *stream = new CapturingStream;
+  int changes = 0;
+  TestNativeProxy proxy(
+      "client", stream, reinterpret_cast<Server *>(0x1), &events, {true, [] { return uint8_t(0); }, [&] { ++changes; }}
+  );
+  stream->take();
+  QVERIFY(proxy.ready(stream, 1));
+  proxy.enter(5, 6, 1, 0, false);
+  stream->take();
+  proxy.setPhysicalKeyboardAllowed(false);
+  QVERIFY(!proxy.usesPhysicalKeyboard());
+  const auto disabled = stream->take();
+  QVERIFY(disabled.startsWith(QByteArray("NKEN\0\0", 6)));
+  QVERIFY(disabled.indexOf("LSYN") >= 6);
+  proxy.keyDown('a', 0, 0x1e, "en");
+  QVERIFY(stream->take().startsWith("DKDL"));
+  proxy.setPhysicalKeyboardAllowed(true);
+  QVERIFY(proxy.usesPhysicalKeyboard());
+  QCOMPARE(stream->take(), QByteArray("NKEN\1\0", 6));
+  QCOMPARE(changes, 2);
 }
 
 QTEST_MAIN(ClientProxyTests)

@@ -35,7 +35,9 @@ ServerProxy::ConnectionResult ServerProxy1_8::parseHandshakeMessage(const uint8_
 ServerProxy::ConnectionResult ServerProxy1_8::parseMessage(const uint8_t *code)
 {
   auto result = ConnectionResult::Okay;
-  if (memcmp(code, kMsgDKeyDown, 4) == 0) {
+  if (memcmp(code, kMsgDLanguageSynchronisation, 4) == 0) {
+    setServerLayouts();
+  } else if (memcmp(code, kMsgDKeyDown, 4) == 0) {
     uint16_t id = 0;
     uint16_t mask = 0;
     uint16_t button = 0;

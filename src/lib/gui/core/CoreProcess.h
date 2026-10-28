@@ -38,7 +38,7 @@ public:
     StartFailed
   };
 
-  explicit CoreProcess(const ServerConfig &serverConfig);
+  explicit CoreProcess(const ServerConfig &serverConfig, const QString &ipcServerName = {});
 
   void start(std::optional<ProcessMode> processMode = std::nullopt);
   void stop(std::optional<ProcessMode> processMode = std::nullopt);
@@ -103,6 +103,10 @@ private Q_SLOTS:
   void daemonIpcClientConnected();
 
 private:
+  friend class CoreProcessStatusTests;
+  void connectCoreIpc();
+  void resetCoreIpcObserver();
+  void scheduleCoreIpcReconnect(int delay = 1000);
   void startForegroundProcess(const QStringList &args);
   void startProcessFromDaemon();
   void stopForegroundProcess();
@@ -129,6 +133,10 @@ private:
   QString m_secureSocketVersion;
   std::optional<ProcessMode> m_lastProcessMode = std::nullopt;
   QTimer m_retryTimer;
+  QTimer m_coreIpcRetryTimer;
+  QString m_coreIpcServerName;
+  quint64 m_coreIpcGeneration = 0;
+  bool m_adoptedCore = false;
   deskflow::gui::ipc::CoreIpcClient *m_coreIpcClient = nullptr;
   deskflow::gui::ipc::DaemonIpcClient *m_daemonIpcClient = nullptr;
   FileTail *m_daemonFileTail = nullptr;

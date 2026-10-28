@@ -8,6 +8,7 @@
 #include "platform/OSXKeyState.h"
 #include "arch/Arch.h"
 #include "base/Log.h"
+#include "platform/NativeKeyboard.h"
 #include "platform/OSXKeyLayoutResource.h"
 #include "platform/OSXMediaKeySupport.h"
 
@@ -513,6 +514,8 @@ bool OSXKeyState::fakeMediaKey(KeyID id)
 
 CGEventFlags OSXKeyState::getModifierStateAsOSXFlags() const
 {
+  if (deskflow::nativeKeyboardSessionActive())
+    return CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState);
   CGEventFlags modifiers = 0;
 
   if (m_shiftPressed) {

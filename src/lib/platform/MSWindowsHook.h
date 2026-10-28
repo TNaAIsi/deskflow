@@ -64,6 +64,9 @@ public:
 
   //! Copy the hook's physical key state; false until it has observed an event.
   static bool getPhysicalKeyState(BYTE keys[256]);
+  static void setPhysicalKeyboardMode(bool enabled);
+  static bool physicalKeyboardMode();
+  static uint8_t physicalModifierMask();
 
   static EHookResult install();
 

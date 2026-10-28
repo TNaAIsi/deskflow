@@ -45,7 +45,7 @@ static const int16_t kProtocolMajorVersion = 1;
  * @note When incrementing the minor version, the Deskflow application version should also increment
  * @since Protocol version 1.0
  */
-static const int16_t kProtocolMinorVersion = 9;
+static const int16_t kProtocolMinorVersion = 10;
 
 /**
  * @brief Default TCP port for Deskflow connections
@@ -544,6 +544,14 @@ extern const char *const kMsgCKeepAlive;
  * @since Protocol version 1.8
  */
 extern const char *const kMsgDKeyDown;
+
+// Protocol 1.10: explicit source capability, receiver readiness, and per-entry
+// native keyboard session. Physical usages never reuse character message codes.
+extern const char *const kMsgNativeKeyboardCapability;
+extern const char *const kMsgNativeKeyboardReady;
+extern const char *const kMsgNativeKeyboardSession;
+extern const char *const kMsgNativePhysicalKey;
+extern const char *const kMsgNativeSyntheticKey;
 
 /**
  * @brief Key press event (v1.1 to v1.7)

@@ -18,7 +18,10 @@ class CoreIpcClient : public IpcClient
   Q_OBJECT
 
 public:
-  explicit CoreIpcClient(QObject *parent = nullptr);
+  explicit CoreIpcClient(
+      QObject *parent = nullptr, const QString &serverName = {},
+      IpcClient::Purpose purpose = IpcClient::Purpose::Interface
+  );
 
   void sendStop();
   void sendWorkspaceCommand(const QJsonObject &command);

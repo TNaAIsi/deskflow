@@ -8,9 +8,12 @@
 #include "platform/MSWindowsHook.h"
 #include "base/DirectionTypes.h"
 #include "base/Log.h"
+#include "common/PhysicalKey.h"
 #include "deskflow/DisplayException.h"
 
+#include <atomic>
 #include <cstring>
+#include <initializer_list>
 #include <mutex>
 
 #ifndef WM_MOUSEHWHEEL
@@ -25,7 +28,11 @@ static HHOOK g_getMessage = nullptr;
 static HHOOK g_keyboardLL = nullptr;
 static HHOOK g_mouseLL = nullptr;
 static bool g_screenSaver = false;
-static EHookMode g_mode = kHOOK_DISABLE;
+static std::atomic<EHookMode> g_mode{kHOOK_DISABLE};
+static std::atomic_bool g_physicalKeyboardMode{false};
+static bool g_lastPhysicalKeyboardMode = false; // Accessed only by the hook thread.
+static std::atomic<uint8_t> g_physicalModifiers{0};
+static std::atomic_bool g_physicalModifiersKnown{false};
 static uint32_t g_zoneSides = 0;
 static int32_t g_zoneSize = 0;
 static int32_t g_xComputer = 0;
@@ -147,6 +154,31 @@ void MSWindowsHook::setMode(EHookMode mode)
   g_mode = mode;
 }
 
+void MSWindowsHook::setPhysicalKeyboardMode(bool enabled)
+{
+  g_physicalKeyboardMode.store(enabled, std::memory_order_release);
+}
+
+bool MSWindowsHook::physicalKeyboardMode()
+{
+  return g_physicalKeyboardMode.load(std::memory_order_acquire);
+}
+
+uint8_t MSWindowsHook::physicalModifierMask()
+{
+  if (g_physicalModifiersKnown.load(std::memory_order_acquire))
+    return g_physicalModifiers.load(std::memory_order_acquire);
+  // Query physical left/right keys, not toggle flags from the Windows layout.
+  const int modifiers[]{VK_LCONTROL, VK_LSHIFT, VK_LMENU, VK_LWIN, VK_RCONTROL, VK_RSHIFT, VK_RMENU, VK_RWIN};
+  BYTE keys[256]{};
+  const bool known = getPhysicalKeyState(keys);
+  uint8_t mask = 0;
+  for (size_t bit = 0; bit < 8; ++bit)
+    if ((known && (keys[modifiers[bit]] & 0x80) != 0) || (!known && (GetAsyncKeyState(modifiers[bit]) & 0x8000) != 0))
+      mask |= uint8_t(1u << bit);
+  return mask;
+}
+
 bool MSWindowsHook::getPhysicalKeyState(BYTE keys[256])
 {
   std::lock_guard<std::mutex> lock(g_keyStateMutex);
@@ -260,6 +292,33 @@ static bool keyboardHookHandler(WPARAM wParam, LPARAM lParam)
   // we need the keyboard state for ToAscii()
   BYTE keys[256];
   keyboardGetState(keys, vkCode, kf_up);
+
+  const bool physical = MSWindowsHook::physicalKeyboardMode() && g_mode == kHOOK_RELAY_EVENTS;
+  if (physical != g_lastPhysicalKeyboardMode) {
+    // The old character path deliberately defers dead keys. Native forwarding
+    // must neither inherit nor later replay that deferred character sequence.
+    g_deadVirtKey = 0;
+    g_deadRelease = 0;
+    g_deadLParam = 0;
+    g_lastPhysicalKeyboardMode = physical;
+  }
+  if (physical) {
+    // Character interpretation is used only for the existing hotkey filter.
+    // Flag 4 avoids changing Windows' dead-key buffer, and every physical
+    // press/release is forwarded even if it produces no character.
+    BYTE semanticKeys[256];
+    std::memcpy(semanticKeys, keys, sizeof(semanticKeys));
+    for (const int modifier : {VK_CONTROL, VK_LCONTROL, VK_RCONTROL, VK_MENU, VK_LMENU, VK_RMENU, VK_LWIN, VK_RWIN})
+      semanticKeys[modifier] = 0;
+    WCHAR character[4]{};
+    const auto scan = static_cast<UINT>((lParam >> 16) & 0x1ffu);
+    const int count = ToUnicode(static_cast<UINT>(wParam), scan, semanticKeys, character, 4, 4);
+    const WPARAM symbol = count > 0 ? static_cast<WPARAM>(character[0]) : 0;
+    PostThreadMessage(g_threadID, DESKFLOW_MSG_KEY, ((wParam & 0xffu) << 16) | symbol, lParam);
+    // Scroll Lock remains Deskflow's local lock control. Caps and NumLock
+    // belong to the target keyboard and must not toggle Windows while remote.
+    return wParam != VK_SCROLL;
+  }
 
   // Update the physical state before ignoring a dead key release so it cannot remain down in the resync snapshot.
   if ((g_deadVirtKey == wParam || g_deadRelease == wParam) && (lParam & 0x80000000u) != 0) {
@@ -453,8 +512,28 @@ static LRESULT CALLBACK keyboardLLHook(int code, WPARAM wParam, LPARAM lParam)
     KBDLLHOOKSTRUCT *info = reinterpret_cast<KBDLLHOOKSTRUCT *>(lParam);
 
     bool const injected = info->flags & LLKHF_INJECTED;
+    const bool ownMarker =
+        info->vkCode == DESKFLOW_HOOK_FAKE_INPUT_VIRTUAL_KEY && info->scanCode == DESKFLOW_HOOK_FAKE_INPUT_SCANCODE;
+    if (injected && MSWindowsHook::physicalKeyboardMode() && !ownMarker)
+      return CallNextHookEx(g_keyboardLL, code, wParam, lParam);
     if (!g_isPrimary && injected) {
       return CallNextHookEx(g_keyboardLL, code, wParam, lParam);
+    }
+    if (!injected) {
+      // Maintain device-level modifier state independently of Windows' logical
+      // Caps/AltGr/keyboard-layout state. This also preserves left/right sides.
+      auto scan = static_cast<uint16_t>(info->scanCode & 0xffu);
+      if ((info->flags & LLKHF_EXTENDED) != 0)
+        scan |= 0x100;
+      const auto usage = deskflow::physicalkey::windowsSet1(scan, static_cast<uint16_t>(info->vkCode));
+      if (usage.page == 7 && usage.id >= 0xe0 && usage.id <= 0xe7) {
+        const auto bit = static_cast<uint8_t>(1u << (usage.id - 0xe0));
+        if ((info->flags & LLKHF_UP) != 0)
+          g_physicalModifiers.fetch_and(static_cast<uint8_t>(~bit));
+        else
+          g_physicalModifiers.fetch_or(bit);
+        g_physicalModifiersKnown.store(true, std::memory_order_release);
+      }
     }
 
     WPARAM wParam = info->vkCode;
@@ -632,6 +711,9 @@ EHookResult MSWindowsHook::install()
 
   // reset fake input flag
   g_fakeServerInput = false;
+  g_physicalModifiersKnown.store(false);
+  g_physicalModifiers.store(physicalModifierMask());
+  g_physicalModifiersKnown.store(true, std::memory_order_release);
 
   // install low-level hooks.  we require that they both get installed.
   g_mouseLL = SetWindowsHookEx(WH_MOUSE_LL, &mouseLLHook, nullptr, 0);
@@ -691,6 +773,8 @@ int MSWindowsHook::uninstall()
   std::lock_guard<std::mutex> lock(g_keyStateMutex);
   std::memset(g_keyState, 0, sizeof(g_keyState));
   g_keyStateValid = false;
+  g_physicalModifiers.store(0);
+  g_physicalModifiersKnown.store(false, std::memory_order_release);
 
   return 1;
 }

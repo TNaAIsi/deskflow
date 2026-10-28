@@ -139,39 +139,39 @@ p, li { white-space: pre-wrap; }
     <name>ClientConfigDialog</name>
     <message>
         <source>Client Configuration</source>
-        <translation type="unfinished">客户端配置</translation>
+        <translation>客户端配置</translation>
     </message>
     <message>
         <source>Use server&apos;s keyboard language on this computer</source>
-        <translation type="unfinished">在此计算机上使用服务器的键盘语言</translation>
+        <translation>在此电脑上使用服务端的键盘语言</translation>
     </message>
     <message>
         <source>Scroll Modifiers</source>
-        <translation type="unfinished">滚动修饰符</translation>
+        <translation>滚动设置</translation>
     </message>
     <message>
         <source>Invert</source>
-        <translation type="unfinished">倒置</translation>
+        <translation>反向</translation>
     </message>
     <message>
         <source>Horizontal Scroll</source>
-        <translation type="unfinished">水平滚动</translation>
+        <translation>水平滚动</translation>
     </message>
     <message>
         <source>Vertical Scroll</source>
-        <translation type="unfinished">垂直滚动</translation>
+        <translation>垂直滚动</translation>
     </message>
     <message>
         <source>Scale</source>
-        <translation type="unfinished">规模</translation>
+        <translation>缩放比例</translation>
     </message>
     <message>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Allow the client to slow the rate it attempts to reconnect to the server when connections attempts are failing. The delay between connection attempts will  start at 1 second intervals and can be a maxium of 5 minutes between connection attempts.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished">&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;允许客户端在连接尝试失败时，降低其重连服务器的频率。连接尝试之间的间隔将从 1 秒开始，最长可达 5 分钟。&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;连接失败时逐渐延长客户端的重连间隔。重连间隔从 1 秒开始，最长为 5 分钟。&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <source>Use dynamic reconnection time based on connection attempts</source>
-        <translation type="unfinished">根据连接尝试次数，采用动态重连时间</translation>
+        <translation>根据连接尝试次数动态调整重连间隔</translation>
     </message>
     <message>
         <source>Use remote Caps Lock to switch between an enabled ASCII-capable input source and the last non-ASCII input source on this Mac. Keeps this Mac&apos;s input language independent of the server. Holding Caps Lock does not enable uppercase lock. Saving restarts sharing to apply this setting.</source>
@@ -180,6 +180,34 @@ p, li { white-space: pre-wrap; }
     <message>
         <source>Use Caps Lock to switch input sources on this Mac</source>
         <translation>使用 Caps Lock 切换此 Mac 的输入法</translation>
+    </message>
+    <message>
+        <source>Use a virtual HID keyboard for physical key input</source>
+        <translation>通过虚拟 HID 键盘接收物理按键</translation>
+    </message>
+    <message>
+        <source>Use this Mac&apos;s keyboard layout, input method and Caps Lock behavior. Set up the keyboard component before enabling this option.</source>
+        <translation>使用此 Mac 的键盘布局、输入法与 Caps Lock 行为。开启前请安装并启用键盘组件。</translation>
+    </message>
+    <message>
+        <source>Virtual keyboard support requires the system component to be installed and enabled.</source>
+        <translation>虚拟键盘功能需要先安装并启用系统组件。</translation>
+    </message>
+    <message>
+        <source>Set up virtual keyboard…</source>
+        <translation>设置虚拟键盘…</translation>
+    </message>
+    <message>
+        <source>Keyboard and mouse</source>
+        <translation>键盘与鼠标</translation>
+    </message>
+    <message>
+        <source>Sound</source>
+        <translation>声音</translation>
+    </message>
+    <message>
+        <source>Files and cache</source>
+        <translation>文件与缓存</translation>
     </message>
 </context>
 <context>
@@ -579,10 +607,6 @@ Do you want to connect to the server?
         <translation>断开</translation>
     </message>
     <message>
-        <source>Shared workspace…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>&lt;p&gt;Failed to connect to the server &apos;%1&apos;.&lt;/p&gt;&lt;p&gt;A Client with your name is already connected to the server.&lt;/p&gt;Please ensure that you&apos;re using a unique name and that only a single instance of the client process is running.&lt;/p&gt;</source>
         <translation>&lt;p&gt;连接到服务器“%1”失败。&lt;/p&gt;&lt;p&gt;一个同名的客户端已连接到服务器。&lt;/p&gt;请确保您使用的名称唯一，且只有一个客户端进程实例在运行。&lt;/p&gt;</translation>
     </message>
@@ -690,6 +714,50 @@ A bound IP is now invalid, you may need to restart the server.</source>
         <translation>Ctrl+Q</translation>
     </message>
     <message>
+        <source>Native keyboard</source>
+        <translation>原生键盘输入</translation>
+    </message>
+    <message>
+        <source>Could not open system extension activation.</source>
+        <translation>无法打开系统扩展启用程序。</translation>
+    </message>
+    <message>
+        <source>Use the full macOS installer package to install Deskflow and its native keyboard component, then approve the system extension.</source>
+        <translation>请使用完整的 macOS 安装包安装 Deskflow 和原生键盘组件，再批准系统扩展。</translation>
+    </message>
+    <message>
+        <source>Could not open the native keyboard component installer.</source>
+        <translation>无法打开原生键盘组件安装程序。</translation>
+    </message>
+    <message>
+        <source>Install the full macOS package to add the native keyboard component, then approve its system extension.</source>
+        <translation>请使用完整的 macOS 安装包添加原生键盘组件，再批准系统扩展。</translation>
+    </message>
+    <message>
+        <source>Waiting for a keyboard connection to negotiate physical key input.</source>
+        <translation>正在等待键鼠连接协商物理按键输入。</translation>
+    </message>
+    <message>
+        <source>This connection is receiving physical keys through the virtual HID keyboard.</source>
+        <translation>当前连接正在通过虚拟 HID 键盘接收物理按键。</translation>
+    </message>
+    <message>
+        <source>Physical keyboard input is negotiated and ready for switching to this Mac.</source>
+        <translation>物理按键输入已协商就绪，切换到此 Mac 后即可使用。</translation>
+    </message>
+    <message>
+        <source>This connection uses compatibility input. Update both computers to a version supporting physical keys.</source>
+        <translation>当前连接使用兼容输入。请将两台电脑都更新到支持物理按键的版本。</translation>
+    </message>
+    <message>
+        <source>Physical keyboard input stopped after a component error. Reconnect after repairing the component.</source>
+        <translation>组件发生错误，物理按键输入已停止。请修复组件后重新连接。</translation>
+    </message>
+    <message>
+        <source>This connection currently uses compatibility input. Enable the component and reconnect to use physical keys.</source>
+        <translation>当前连接使用兼容输入。请启用组件并重新连接，以使用物理按键。</translation>
+    </message>
+    <message>
         <source>The name you have chosen is invalid.
 
 Valid names:
@@ -757,31 +825,31 @@ Additionally, check you are able to %1 the server config file: %2</source>
     </message>
     <message>
         <source>Display layout</source>
-        <translation>显示器布局</translation>
+        <translation type="vanished">显示器布局</translation>
     </message>
     <message>
         <source>Layout is controlled by the server&apos;s configuration file. Disable the external configuration in Server Configuration before using the visual layout.</source>
-        <translation>当前布局由服务端配置文件管理。请在服务端配置中关闭外部配置并保存，再使用视觉布局。</translation>
+        <translation type="vanished">当前布局由服务端配置文件管理。请在服务端配置中关闭外部配置并保存，再使用视觉布局。</translation>
     </message>
     <message>
         <source>Connect to the server before changing its display layout.</source>
-        <translation>请先连接服务端，再修改显示器布局。</translation>
+        <translation type="vanished">请先连接服务端，再修改显示器布局。</translation>
     </message>
     <message>
         <source>The server connection was lost. Your edits are kept in this window; reconnect and save again.</source>
-        <translation>与服务端的连接已断开。此窗口会保留尚未保存的修改，请重新连接后再次保存。</translation>
+        <translation type="vanished">与服务端的连接已断开。此窗口会保留尚未保存的修改，请重新连接后再次保存。</translation>
     </message>
     <message>
         <source>The server now uses an external configuration file. Your edits have not been applied.</source>
-        <translation>服务端已改用外部配置文件，本次布局修改尚未应用。</translation>
+        <translation type="vanished">服务端已改用外部配置文件，本次布局修改尚未应用。</translation>
     </message>
     <message>
         <source>The display information changed and this layout could not be saved. Adjust the monitors and try again.</source>
-        <translation>显示器信息已变化，本次布局未能保存。请调整显示器后重试。</translation>
+        <translation type="vanished">显示器信息已变化，本次布局未能保存。请调整显示器后重试。</translation>
     </message>
     <message>
         <source>Sharing mode changed. Reopen Display layout before saving these changes.</source>
-        <translation>共享角色已变化，请重新打开显示器布局后再保存修改。</translation>
+        <translation type="vanished">共享角色已变化，请重新打开显示器布局后再保存修改。</translation>
     </message>
 </context>
 <context>
@@ -965,7 +1033,47 @@ Additionally, check you are able to %1 the server config file: %2</source>
     </message>
     <message>
         <source>Disconnected</source>
-        <translation type="unfinished"></translation>
+        <translation>已断开</translation>
+    </message>
+    <message>
+        <source>Native virtual keyboard output is available on macOS clients.</source>
+        <translation>macOS 客户端支持原生虚拟键盘输出。</translation>
+    </message>
+    <message>
+        <source>Virtual keyboard component is ready. Physical keys are used after reconnecting with this option enabled.</source>
+        <translation>虚拟键盘组件已就绪。开启此选项并重新连接后，可使用物理按键输入。</translation>
+    </message>
+    <message>
+        <source>Approve the Karabiner virtual HID system extension in macOS settings, then reconnect.</source>
+        <translation>请在 macOS 设置中批准 Karabiner 虚拟 HID 系统扩展，然后重新连接。</translation>
+    </message>
+    <message>
+        <source>The native keyboard component belongs to another installation or login session. Run component setup again.</source>
+        <translation>原生键盘组件与本次安装或登录会话不匹配。请重新设置组件。</translation>
+    </message>
+    <message>
+        <source>The virtual HID component version does not match. Run component setup again.</source>
+        <translation>虚拟 HID 组件版本不匹配。请重新设置组件。</translation>
+    </message>
+    <message>
+        <source>Another Deskflow input session is using the virtual keyboard.</source>
+        <translation>另一条 Deskflow 输入会话正在使用虚拟键盘。</translation>
+    </message>
+    <message>
+        <source>The component is installed. Enable physical keyboard input and reconnect to initialize it.</source>
+        <translation>组件已安装。请开启物理按键输入并重新连接，以完成初始化。</translation>
+    </message>
+    <message>
+        <source>The virtual HID service is not ready. Run component setup and approve its system extension.</source>
+        <translation>虚拟 HID 服务尚未就绪。请设置键盘组件并批准系统扩展。</translation>
+    </message>
+    <message>
+        <source>Native keyboard component is not running. Install or repair it using Component setup.</source>
+        <translation>原生键盘组件未运行。请通过“设置虚拟键盘”安装或修复。</translation>
+    </message>
+    <message>
+        <source>Native keyboard component did not respond. Run Component setup again.</source>
+        <translation>原生键盘组件没有响应。请重新设置虚拟键盘。</translation>
     </message>
 </context>
 <context>
@@ -1140,15 +1248,15 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Enable lock to computer at startup</source>
-        <translation type="unfinished">启动时启用锁定到计算机</translation>
+        <translation>启动时将键鼠锁定在本机</translation>
     </message>
     <message>
         <source>Keep the cursor on this Windows computer while its foreground window fills a monitor (including videos), or an application confines the cursor. Explicit switch hotkeys still work. This does not change manual cursor locking.</source>
-        <translation>当前台窗口占满显示器（包括全屏视频），或应用限制鼠标范围时，将鼠标保留在此 Windows 电脑上。仍可使用快捷键主动切换电脑。此选项不改变手动鼠标锁定。</translation>
+        <translation type="vanished">当前台窗口占满显示器（包括全屏视频），或应用限制鼠标范围时，将鼠标保留在此 Windows 电脑上。仍可使用快捷键主动切换电脑。此选项不改变手动鼠标锁定。</translation>
     </message>
     <message>
         <source>Keep cursor local during full-screen apps or capture</source>
-        <translation>全屏或应用限制鼠标时，禁止鼠标自动跨电脑</translation>
+        <translation type="vanished">全屏或应用限制鼠标时，禁止鼠标自动跨电脑</translation>
     </message>
     <message>
         <source>Displays and computers</source>
@@ -1156,11 +1264,19 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Display layout…</source>
-        <translation>显示器布局…</translation>
+        <translation type="vanished">显示器布局…</translation>
     </message>
     <message>
         <source>Display layout has its own Save button. Saving or cancelling server settings does not undo saved display positions.</source>
-        <translation>显示器布局单独保存；保存或取消其他服务端设置，不会撤销已经保存的显示器位置。</translation>
+        <translation type="vanished">显示器布局单独保存；保存或取消其他服务端设置，不会撤销已经保存的显示器位置。</translation>
+    </message>
+    <message>
+        <source>Sound</source>
+        <translation>声音</translation>
+    </message>
+    <message>
+        <source>Files and cache</source>
+        <translation>文件与缓存</translation>
     </message>
     <message>
         <source>Registered computers and keyboard settings. This list does not set display positions.</source>
@@ -1179,16 +1295,48 @@ Enabling this setting will disable the server config GUI.</source>
         <translation>移除电脑</translation>
     </message>
     <message>
+        <source>Add a game if automatic detection misses it, such as a borderless game on a single monitor. Listed programs are protected only while full-screen.</source>
+        <translation>如果自动检测未识别游戏，例如单屏无边框游戏，可在此添加游戏程序。列表中的程序也只在全屏时受到保护。</translation>
+    </message>
+    <message>
+        <source>Add game…</source>
+        <translation>添加游戏…</translation>
+    </message>
+    <message>
+        <source>Remove selected game</source>
+        <translation>移除所选游戏</translation>
+    </message>
+    <message>
+        <source>The external configuration file controls computer links. Turn it off to edit the layout here.</source>
+        <translation>当前使用外部配置文件管理电脑连接。关闭外部配置后，可在此编辑布局。</translation>
+    </message>
+    <message>
+        <source>Drag the displays below to match your desk. Save applies display positions and the other server settings together.</source>
+        <translation>拖动下方显示器，对照桌面上的实际摆放。点击“保存”会一并应用显示器位置和其他服务端设置。</translation>
+    </message>
+    <message>
+        <source>Computer grid mode groups each computer into one block. Enable individual monitors below for independent screen placement.</source>
+        <translation>整机网格模式中，每台电脑对应一个方块。开启下方的独立显示器模式后，可以分别摆放每块屏幕。</translation>
+    </message>
+    <message>
+        <source>Choose a game executable</source>
+        <translation>选择游戏程序</translation>
+    </message>
+    <message>
+        <source>Windows programs (*.exe)</source>
+        <translation>Windows 程序 (*.exe)</translation>
+    </message>
+    <message>
         <source>External configuration file controls computer links. Turn off external configuration and save server settings before arranging displays here.</source>
-        <translation>当前使用外部配置文件管理电脑连接。请关闭外部配置并保存服务端设置，再排列显示器。</translation>
+        <translation type="vanished">当前使用外部配置文件管理电脑连接。请关闭外部配置并保存服务端设置，再排列显示器。</translation>
     </message>
     <message>
         <source>Independent monitor layout. Computer positions are edited in Display layout; the list manages computer identity and keyboard settings.</source>
-        <translation>当前使用独立显示器布局。点击“显示器布局”调整位置，下方列表用于管理电脑名称、别名和键盘设置。</translation>
+        <translation type="vanished">当前使用独立显示器布局。点击“显示器布局”调整位置，下方列表用于管理电脑名称、别名和键盘设置。</translation>
     </message>
     <message>
         <source>Compatibility computer layout is selected. Each computer is one block in the grid below. Use Display layout to arrange individual monitors instead.</source>
-        <translation>当前使用整机兼容布局，下方每个方块代表一台电脑。点击“显示器布局”可以分别排列每块屏幕。</translation>
+        <translation type="vanished">当前使用整机兼容布局，下方每个方块代表一台电脑。点击“显示器布局”可以分别排列每块屏幕。</translation>
     </message>
     <message>
         <source>Compatibility layout: drag whole computers to set their crossing directions.</source>
@@ -1196,7 +1344,7 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Save computer changes before arranging displays.</source>
-        <translation>请先保存电脑设置的更改，再排列显示器。</translation>
+        <translation type="vanished">请先保存电脑设置的更改，再排列显示器。</translation>
     </message>
     <message>
         <source>%1 (server)</source>
@@ -1205,6 +1353,14 @@ Enabling this setting will disable the server config GUI.</source>
     <message>
         <source>Aliases: %1</source>
         <translation>别名：%1</translation>
+    </message>
+    <message>
+        <source>Automatically keep control on this Windows computer when a full-screen game captures the pointer or uses exclusive rendering. Add a game below if automatic detection misses it. Listed games still require full-screen mode. Full-screen display alone, or cursor capture in a windowed app, does not trigger protection. Explicit switch shortcuts still work.</source>
+        <translation>全屏游戏限制鼠标或使用独占渲染时，自动将控制权保留在这台 Windows 电脑上。如果自动检测未识别游戏，可在下方添加程序；列表中的游戏也必须处于全屏模式。仅窗口全屏，或窗口模式的应用限制鼠标，不会单独触发保护。主动切换快捷键仍然可用。</translation>
+    </message>
+    <message>
+        <source>Keep keyboard and mouse here during full-screen games</source>
+        <translation>全屏游戏时将键鼠保留在本机</translation>
     </message>
 </context>
 <context>
@@ -1430,6 +1586,245 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
 </context>
 <context>
+    <name>SharingSettingsWidget</name>
+    <message>
+        <source>Complete</source>
+        <translation>已完成</translation>
+    </message>
+    <message>
+        <source>Updating clipboard</source>
+        <translation>正在更新剪贴板</translation>
+    </message>
+    <message>
+        <source>Received; newer clipboard kept</source>
+        <translation>已接收，保留较新的剪贴板</translation>
+    </message>
+    <message>
+        <source>Transferring</source>
+        <translation>正在传输</translation>
+    </message>
+    <message>
+        <source>Requesting</source>
+        <translation>正在请求</translation>
+    </message>
+    <message>
+        <source>Waiting to receive</source>
+        <translation>等待接收</translation>
+    </message>
+    <message>
+        <source>Cancelled</source>
+        <translation>已取消</translation>
+    </message>
+    <message>
+        <source>Interrupted</source>
+        <translation>已中断</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>错误</translation>
+    </message>
+    <message>
+        <source>Share this computer&apos;s system sound</source>
+        <translation>共享本机系统声音</translation>
+    </message>
+    <message>
+        <source>Play the server&apos;s sound</source>
+        <translation>播放服务端声音</translation>
+    </message>
+    <message>
+        <source>Share copied files and folders</source>
+        <translation>共享已复制的文件和文件夹</translation>
+    </message>
+    <message>
+        <source>Receive selected copied files…</source>
+        <translation>接收所选的已复制文件…</translation>
+    </message>
+    <message>
+        <source>File</source>
+        <translation>文件</translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation>电脑</translation>
+    </message>
+    <message>
+        <source>Direction</source>
+        <translation>方向</translation>
+    </message>
+    <message>
+        <source>Progress</source>
+        <translation>进度</translation>
+    </message>
+    <message>
+        <source>State</source>
+        <translation>状态</translation>
+    </message>
+    <message>
+        <source>Updated</source>
+        <translation>更新时间</translation>
+    </message>
+    <message>
+        <source>Cancel transfer</source>
+        <translation>取消传输</translation>
+    </message>
+    <message>
+        <source>Open received location</source>
+        <translation>打开接收位置</translation>
+    </message>
+    <message>
+        <source>Clear completed history</source>
+        <translation>清除已完成记录</translation>
+    </message>
+    <message>
+        <source>Cached files</source>
+        <translation>缓存项目</translation>
+    </message>
+    <message>
+        <source>Size</source>
+        <translation>大小</translation>
+    </message>
+    <message>
+        <source>Files</source>
+        <translation>文件数</translation>
+    </message>
+    <message>
+        <source>Open selected cache</source>
+        <translation>打开所选缓存</translation>
+    </message>
+    <message>
+        <source>Remove selected cache</source>
+        <translation>删除所选缓存</translation>
+    </message>
+    <message>
+        <source>Clear unused cache</source>
+        <translation>清理未使用缓存</translation>
+    </message>
+    <message>
+        <source>Share the Windows system output with connected clients. Sound routing stays fixed when the mouse changes computers; local playback continues.</source>
+        <translation>将 Windows 系统声音共享给已连接的客户端。声音去向不随鼠标切换而改变，本机仍会继续播放。</translation>
+    </message>
+    <message>
+        <source>Receive the server&apos;s system sound and play it through this computer&apos;s selected output. Sound keeps playing when the pointer returns to the server.</source>
+        <translation>接收服务端系统声音，并通过本机所选设备播放。鼠标返回服务端时，声音仍会继续播放。</translation>
+    </message>
+    <message>
+        <source>Send sound to</source>
+        <translation>发送声音到</translation>
+    </message>
+    <message>
+        <source>Receive sound from</source>
+        <translation>接收声音来源</translation>
+    </message>
+    <message>
+        <source>Play through</source>
+        <translation>播放设备</translation>
+    </message>
+    <message>
+        <source>System sound capture is available when Windows is the server.</source>
+        <translation>Windows 作为服务端时支持系统声音采集。</translation>
+    </message>
+    <message>
+        <source>Playback includes network and output-device buffering. Wired headphones avoid additional Bluetooth delay.</source>
+        <translation>播放会受到网络和输出设备缓冲的影响。有线耳机可避免额外的蓝牙延迟。</translation>
+    </message>
+    <message>
+        <source> MiB</source>
+        <translation> MiB</translation>
+    </message>
+    <message>
+        <source>No size limit</source>
+        <translation>无大小限制</translation>
+    </message>
+    <message>
+        <source>Automatically receive copied files up to</source>
+        <translation>自动接收文件上限</translation>
+    </message>
+    <message>
+        <source>Copy files in Explorer or Finder, wait for the transfer to finish, then paste on the other computer. Manage transfer records and received cache below.</source>
+        <translation>在 Explorer 或 Finder 复制文件，等待传输完成，再到另一台电脑粘贴。可在下方管理传输记录和接收缓存。</translation>
+    </message>
+    <message>
+        <source>Received file cache</source>
+        <translation>接收文件缓存</translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation>刷新</translation>
+    </message>
+    <message>
+        <source>Cache removal affects received copies only. Files used by the clipboard or an active transfer are protected. Clearing history does not delete files.</source>
+        <translation>删除缓存只影响接收的副本。剪贴板或活动传输正在使用的文件会受到保护。清除记录不会删除文件。</translation>
+    </message>
+    <message>
+        <source>All connected clients</source>
+        <translation>所有已连接客户端</translation>
+    </message>
+    <message>
+        <source>Connected server</source>
+        <translation>已连接服务端</translation>
+    </message>
+    <message>
+        <source>%1 (offline)</source>
+        <translation>%1（已离线）</translation>
+    </message>
+    <message>
+        <source>System default output</source>
+        <translation>系统默认输出</translation>
+    </message>
+    <message>
+        <source>%1 connected computer(s). Copied files are shared automatically within the configured limit.</source>
+        <translation>已连接 %1 台电脑。复制的文件会在所设上限内自动共享。</translation>
+    </message>
+    <message>
+        <source>File sharing is stopped. Received files and cache remain available for management.</source>
+        <translation>文件共享已停止，仍可管理已接收的文件和缓存。</translation>
+    </message>
+    <message>
+        <source>%1 — %2 (%3)</source>
+        <translation>%1 — %2（%3）</translation>
+    </message>
+    <message>
+        <source> · cache removed</source>
+        <translation> · 缓存已删除</translation>
+    </message>
+    <message>
+        <source>Receive</source>
+        <translation>接收</translation>
+    </message>
+    <message>
+        <source>Send</source>
+        <translation>发送</translation>
+    </message>
+    <message>
+        <source>%1 / %2</source>
+        <translation>%1 / %2</translation>
+    </message>
+    <message>
+        <source>Calculating cache usage…</source>
+        <translation>正在统计缓存占用…</translation>
+    </message>
+    <message>
+        <source>%1 in %2 cached file(s)</source>
+        <translation>缓存文件共 %2 个，占用 %1</translation>
+    </message>
+    <message>
+        <source>Active transfer</source>
+        <translation>传输中</translation>
+    </message>
+    <message>
+        <source>In clipboard</source>
+        <translation>剪贴板正在使用</translation>
+    </message>
+    <message>
+        <source>Available</source>
+        <translation>可用</translation>
+    </message>
+    <message>
+        <source>Save received files</source>
+        <translation>保存接收文件</translation>
+    </message>
+</context>
+<context>
     <name>StatusBar</name>
     <message>
         <source>%1 is not running</source>
@@ -1461,7 +1856,7 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message numerus="yes">
         <source>%1 is connected, with %n client(s): %2</source>
-        <extracomment>Shown when in server mode and at least 1 client is connected %1 is replaced by the app name %2 will be a list of at least one client %n will be replaced by the number of clients (n is &gt;=1), it is not requried to be in the translation</extracomment>
+        <extracomment>%1 is the application name; %2 lists currently connected clients.</extracomment>
         <translation>
             <numerusform>%1 已连接，共有 %n 个客户端：%2</numerusform>
         </translation>
@@ -1471,6 +1866,10 @@ Enabling this setting will disable the server config GUI.</source>
  %1</source>
         <translation>客户端：
  %1</translation>
+    </message>
+    <message>
+        <source>%1 is connected</source>
+        <translation>%1 已连接</translation>
     </message>
     <message>
         <source>A new version v%1 is available</source>
@@ -1490,7 +1889,7 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>%1 is waiting %2 seconds before the next retry</source>
-        <translation type="unfinished">%1 正在等待 %2 秒，然后进行下一次重试</translation>
+        <translation>%1 将在 %2 秒后重试</translation>
     </message>
     <message>
         <source>%1 Encryption Enabled</source>
@@ -1505,159 +1904,159 @@ Enabling this setting will disable the server config GUI.</source>
     <name>WorkspaceDialog</name>
     <message>
         <source>Complete</source>
-        <translation>已完成</translation>
+        <translation type="vanished">已完成</translation>
     </message>
     <message>
         <source>Updating clipboard</source>
-        <translation>正在更新剪贴板</translation>
+        <translation type="vanished">正在更新剪贴板</translation>
     </message>
     <message>
         <source>Received; clipboard kept</source>
-        <translation>已接收，剪贴板未替换</translation>
+        <translation type="vanished">已接收，剪贴板未替换</translation>
     </message>
     <message>
         <source>Transferring</source>
-        <translation>正在传输</translation>
+        <translation type="vanished">正在传输</translation>
     </message>
     <message>
         <source>Requesting</source>
-        <translation>正在请求</translation>
+        <translation type="vanished">正在请求</translation>
     </message>
     <message>
         <source>Available</source>
-        <translation>可接收</translation>
+        <translation type="vanished">可接收</translation>
     </message>
     <message>
         <source>Cancelled</source>
-        <translation>已取消</translation>
+        <translation type="vanished">已取消</translation>
     </message>
     <message>
         <source>Error</source>
-        <translation type="unfinished">错误</translation>
+        <translation type="obsolete">错误</translation>
     </message>
     <message>
         <source>Enable shared workspace</source>
-        <translation>启用共享工作台</translation>
+        <translation type="vanished">启用共享工作台</translation>
     </message>
     <message>
         <source>Share copied files and folders</source>
-        <translation>共享已复制的文件和文件夹</translation>
+        <translation type="vanished">共享已复制的文件和文件夹</translation>
     </message>
     <message>
         <source>Share this Windows computer&apos;s system sound</source>
-        <translation>共享此 Windows 电脑的系统声音</translation>
+        <translation type="vanished">共享此 Windows 电脑的系统声音</translation>
     </message>
     <message>
         <source>Play sound from the other computer</source>
-        <translation>播放另一台电脑的声音</translation>
+        <translation type="vanished">播放另一台电脑的声音</translation>
     </message>
     <message>
         <source>Shared workspace</source>
-        <translation>共享工作台</translation>
+        <translation type="vanished">共享工作台</translation>
     </message>
     <message>
         <source> MiB</source>
-        <translation> MiB</translation>
+        <translation type="vanished"> MiB</translation>
     </message>
     <message>
         <source>No size limit</source>
-        <translation>无大小限制</translation>
+        <translation type="vanished">无大小限制</translation>
     </message>
     <message>
         <source>Automatically receive copied files up to</source>
-        <translation>自动接收文件上限</translation>
+        <translation type="vanished">自动接收文件上限</translation>
     </message>
     <message>
         <source>Send selected files to</source>
-        <translation>发送所选文件到</translation>
+        <translation type="vanished">发送所选文件到</translation>
     </message>
     <message>
         <source>Choose files…</source>
-        <translation>选择文件…</translation>
+        <translation type="vanished">选择文件…</translation>
     </message>
     <message>
         <source>Choose folder…</source>
-        <translation>选择文件夹…</translation>
+        <translation type="vanished">选择文件夹…</translation>
     </message>
     <message>
         <source>Copy in Explorer or Finder, wait for transfer completion, then paste on the other computer. Source files remain unchanged. Larger offers and manually shared files are available below.</source>
-        <translation>在 Explorer 或 Finder 复制文件，等待传输完成，再到另一台电脑粘贴。源文件会保留。超过自动接收上限或手动分享的文件可在下方接收。</translation>
+        <translation type="vanished">在 Explorer 或 Finder 复制文件，等待传输完成，再到另一台电脑粘贴。源文件会保留。超过自动接收上限或手动分享的文件可在下方接收。</translation>
     </message>
     <message>
         <source>Available from other computers</source>
-        <translation>其他电脑可接收的文件</translation>
+        <translation type="vanished">其他电脑可接收的文件</translation>
     </message>
     <message>
         <source>Save selected offer to…</source>
-        <translation>保存所选文件到…</translation>
+        <translation type="vanished">保存所选文件到…</translation>
     </message>
     <message>
         <source>File</source>
-        <translation>文件</translation>
+        <translation type="vanished">文件</translation>
     </message>
     <message>
         <source>Computer</source>
-        <translation>电脑</translation>
+        <translation type="vanished">电脑</translation>
     </message>
     <message>
         <source>Direction</source>
-        <translation>方向</translation>
+        <translation type="vanished">方向</translation>
     </message>
     <message>
         <source>Progress</source>
-        <translation>进度</translation>
+        <translation type="vanished">进度</translation>
     </message>
     <message>
         <source>State</source>
-        <translation>状态</translation>
+        <translation type="vanished">状态</translation>
     </message>
     <message>
         <source>Cancel transfer</source>
-        <translation>取消传输</translation>
+        <translation type="vanished">取消传输</translation>
     </message>
     <message>
         <source>Open received location</source>
-        <translation>打开接收位置</translation>
+        <translation type="vanished">打开接收位置</translation>
     </message>
     <message>
         <source>Clear completed clipboard cache</source>
-        <translation>清理已完成文件缓存</translation>
+        <translation type="vanished">清理已完成文件缓存</translation>
     </message>
     <message>
         <source>Files</source>
-        <translation>文件</translation>
+        <translation type="vanished">文件</translation>
     </message>
     <message>
         <source>Sound routing stays fixed when the mouse changes computers. Enable sending on Windows and playback on the Mac. Local Windows output continues playing.</source>
-        <translation>声音去向不随鼠标切换而改变。在 Windows 启用发送，在 Mac 启用播放；Windows 本机仍会播放原声音。</translation>
+        <translation type="vanished">声音去向不随鼠标切换而改变。在 Windows 启用发送，在 Mac 启用播放；Windows 本机仍会播放原声音。</translation>
     </message>
     <message>
         <source>System sound capture is available on Windows.</source>
-        <translation>系统声音采集适用于 Windows。</translation>
+        <translation type="vanished">系统声音采集适用于 Windows。</translation>
     </message>
     <message>
         <source>Send sound to</source>
-        <translation>发送声音到</translation>
+        <translation type="vanished">发送声音到</translation>
     </message>
     <message>
         <source>Receive sound from</source>
-        <translation>接收声音来源</translation>
+        <translation type="vanished">接收声音来源</translation>
     </message>
     <message>
         <source>Play through</source>
-        <translation>播放设备</translation>
+        <translation type="vanished">播放设备</translation>
     </message>
     <message>
         <source>Use wired networking and wired headphones for the lowest latency. Bluetooth adds its own playback delay. Sending and receiving simultaneously is disabled to prevent audio loops.</source>
-        <translation>有线网络和有线耳机适合低延迟使用。蓝牙会增加播放延迟。为避免声音回环，发送和接收不能同时启用。</translation>
+        <translation type="vanished">有线网络和有线耳机适合低延迟使用。蓝牙会增加播放延迟。为避免声音回环，发送和接收不能同时启用。</translation>
     </message>
     <message>
         <source>Sound</source>
-        <translation>声音</translation>
+        <translation type="vanished">声音</translation>
     </message>
     <message>
         <source>Arrange every physical monitor independently, including monitors belonging to the same computer. Touching edges define where the pointer crosses. Use Identify to match the layout to your desk.</source>
-        <translation>每块显示器都可以单独摆放，包括同一台电脑的多个显示器。相接的边缘决定鼠标穿越的位置。可通过识别功能对照真实屏幕。</translation>
+        <translation type="vanished">每块显示器都可以单独摆放，包括同一台电脑的多个显示器。相接的边缘决定鼠标穿越的位置。可通过识别功能对照真实屏幕。</translation>
     </message>
     <message>
         <source>Arrange individual monitors…</source>
@@ -1665,15 +2064,15 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Monitors</source>
-        <translation>显示器</translation>
+        <translation type="vanished">显示器</translation>
     </message>
     <message>
         <source>Share files</source>
-        <translation>分享文件</translation>
+        <translation type="vanished">分享文件</translation>
     </message>
     <message>
         <source>Share folder</source>
-        <translation>分享文件夹</translation>
+        <translation type="vanished">分享文件夹</translation>
     </message>
     <message>
         <source>Start Deskflow sharing first, then reopen this window. Preferences can still be saved.</source>
@@ -1689,47 +2088,47 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>%1 (offline)</source>
-        <translation>%1（已离线）</translation>
+        <translation type="vanished">%1（已离线）</translation>
     </message>
     <message>
         <source>All connected computers</source>
-        <translation>所有已连接电脑</translation>
+        <translation type="vanished">所有已连接电脑</translation>
     </message>
     <message>
         <source>First active source</source>
-        <translation>首个活动来源</translation>
+        <translation type="vanished">首个活动来源</translation>
     </message>
     <message>
         <source>System default output</source>
-        <translation>系统默认输出</translation>
+        <translation type="vanished">系统默认输出</translation>
     </message>
     <message>
         <source>%1 · workspace port %2 · %3 connected computer(s)</source>
-        <translation>%1 · 工作台端口 %2 · 已连接 %3 台电脑</translation>
+        <translation type="vanished">%1 · 工作台端口 %2 · 已连接 %3 台电脑</translation>
     </message>
     <message>
         <source>Shared workspace is disabled or unavailable. Keyboard and mouse use their normal connection.</source>
-        <translation>共享工作台已关闭或不可用。键鼠继续使用原有连接。</translation>
+        <translation type="vanished">共享工作台已关闭或不可用。键鼠继续使用原有连接。</translation>
     </message>
     <message>
         <source>Receive</source>
-        <translation>接收</translation>
+        <translation type="vanished">接收</translation>
     </message>
     <message>
         <source>Send</source>
-        <translation>发送</translation>
+        <translation type="vanished">发送</translation>
     </message>
     <message>
         <source>Start sharing to connect the shared workspace.</source>
-        <translation>请启动共享，以连接共享工作台。</translation>
+        <translation type="vanished">请启动共享，以连接共享工作台。</translation>
     </message>
     <message>
         <source>Start sharing before sending files.</source>
-        <translation>请先启动共享，再发送文件。</translation>
+        <translation type="vanished">请先启动共享，再发送文件。</translation>
     </message>
     <message>
         <source>Save received files</source>
-        <translation>保存接收文件</translation>
+        <translation type="vanished">保存接收文件</translation>
     </message>
     <message>
         <source>Start sharing and connect the computers before arranging monitors.</source>
@@ -1737,26 +2136,26 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Display layout…</source>
-        <translation>显示器布局…</translation>
+        <translation type="vanished">显示器布局…</translation>
     </message>
     <message>
         <source>Layout is controlled by the server&apos;s configuration file.</source>
-        <translation>当前布局由服务端配置文件管理。</translation>
+        <translation type="vanished">当前布局由服务端配置文件管理。</translation>
     </message>
     <message>
         <source>Independent monitor layout is selected. The computer grid does not control pointer directions.</source>
-        <translation>当前使用独立显示器布局，旧电脑网格不再控制跨屏方向。</translation>
+        <translation type="vanished">当前使用独立显示器布局，旧电脑网格不再控制跨屏方向。</translation>
     </message>
     <message>
         <source>Computer grid layout is selected. Enable independent monitors in Display layout to arrange each screen.</source>
-        <translation>当前使用整机网格布局。可在“显示器布局”中开启独立显示器模式，分别排列每块屏幕。</translation>
+        <translation type="vanished">当前使用整机网格布局。可在“显示器布局”中开启独立显示器模式，分别排列每块屏幕。</translation>
     </message>
 </context>
 <context>
     <name>WorkspaceDropArea</name>
     <message>
         <source>Drop files or folders here to share with the selected computer</source>
-        <translation>将文件或文件夹拖到这里，分享给所选电脑</translation>
+        <translation type="vanished">将文件或文件夹拖到这里，分享给所选电脑</translation>
     </message>
 </context>
 <context>
@@ -1810,7 +2209,7 @@ Enabling this setting will disable the server config GUI.</source>
     <name>deskflow::workspace::DisplayLayoutDialog</name>
     <message>
         <source>Arrange and route each monitor separately</source>
-        <translation>分别排列和路由每块显示器</translation>
+        <translation type="vanished">分别排列和路由每块显示器</translation>
     </message>
     <message>
         <source>Individual monitor layout</source>
@@ -1818,7 +2217,66 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Drag each monitor to match your desk. Touching edges connect; colours identify computers. You can place a Mac monitor between two Windows monitors. This does not change system display settings.</source>
+        <translation type="vanished">拖动每块显示器，对照桌面上的实际摆放。相接的边缘会连接，不同颜色表示不同电脑。可以将 Mac 屏幕放在两块 Windows 屏幕之间；不会改变系统显示设置。</translation>
+    </message>
+    <message>
+        <source>Identify selected</source>
+        <translation type="vanished">识别所选显示器</translation>
+    </message>
+    <message>
+        <source>Fit monitors</source>
+        <translation type="vanished">适配视图</translation>
+    </message>
+    <message>
+        <source>Arrange in a row</source>
+        <translation type="vanished">排列成一行</translation>
+    </message>
+    <message>
+        <source>X</source>
+        <translation type="vanished">X</translation>
+    </message>
+    <message>
+        <source>Y</source>
+        <translation type="vanished">Y</translation>
+    </message>
+    <message>
+        <source>Width</source>
+        <translation type="vanished">宽度</translation>
+    </message>
+    <message>
+        <source>Height</source>
+        <translation type="vanished">高度</translation>
+    </message>
+    <message>
+        <source>Select a monitor to edit its position and canvas size.</source>
+        <translation type="vanished">选择一块显示器，编辑它的位置和画布尺寸。</translation>
+    </message>
+    <message>
+        <source>Overlapping monitors</source>
+        <translation type="vanished">显示器重叠</translation>
+    </message>
+    <message>
+        <source>Move the monitors so their interiors do not overlap. Touching edges are allowed.</source>
+        <translation type="vanished">请移动显示器，使内部区域不重叠。边缘可以相接。</translation>
+    </message>
+    <message>
+        <source>When enabled, this canvas controls pointer directions and the computer grid is inactive. Devices without display information stay outside automatic switching. Disable this option to use the computer grid again; your monitor positions are kept. Saving here applies immediately.</source>
+        <translation type="vanished">开启后，鼠标与方向快捷键均按此画布切换，旧电脑网格停用；暂时没有显示器信息的电脑不参与自动跨屏。关闭后使用整机网格，已摆放的显示器位置会保留。此处保存立即生效。</translation>
+    </message>
+</context>
+<context>
+    <name>deskflow::workspace::DisplayLayoutWidget</name>
+    <message>
+        <source>Arrange and route each monitor separately</source>
+        <translation>分别排列和路由每块显示器</translation>
+    </message>
+    <message>
+        <source>Drag each monitor to match your desk. Touching edges connect; colours identify computers. You can place a Mac monitor between two Windows monitors. This does not change system display settings.</source>
         <translation>拖动每块显示器，对照桌面上的实际摆放。相接的边缘会连接，不同颜色表示不同电脑。可以将 Mac 屏幕放在两块 Windows 屏幕之间；不会改变系统显示设置。</translation>
+    </message>
+    <message>
+        <source>When enabled, this canvas controls pointer directions and the computer grid is inactive. Devices without display information stay outside automatic switching. Disable this option to use the computer grid again; your monitor positions are kept. Changes are applied with the configuration dialog Save button.</source>
+        <translation>开启后，鼠标与方向快捷键均按此画布切换，整机网格停用；暂时没有显示器信息的电脑不参与自动跨屏。关闭后使用整机网格，已摆放的显示器位置会保留。点击配置窗口的“保存”后应用更改。</translation>
     </message>
     <message>
         <source>Identify selected</source>
@@ -1853,20 +2311,52 @@ Enabling this setting will disable the server config GUI.</source>
         <translation>选择一块显示器，编辑它的位置和画布尺寸。</translation>
     </message>
     <message>
-        <source>Overlapping monitors</source>
-        <translation>显示器重叠</translation>
-    </message>
-    <message>
         <source>Move the monitors so their interiors do not overlap. Touching edges are allowed.</source>
         <translation>请移动显示器，使内部区域不重叠。边缘可以相接。</translation>
-    </message>
-    <message>
-        <source>When enabled, this canvas controls pointer directions and the computer grid is inactive. Devices without display information stay outside automatic switching. Disable this option to use the computer grid again; your monitor positions are kept. Saving here applies immediately.</source>
-        <translation>开启后，鼠标与方向快捷键均按此画布切换，旧电脑网格停用；暂时没有显示器信息的电脑不参与自动跨屏。关闭后使用整机网格，已摆放的显示器位置会保留。此处保存立即生效。</translation>
     </message>
 </context>
 <context>
     <name>deskflow::workspace::FileTransferService</name>
+    <message>
+        <source>The previous session ended before this transfer completed.</source>
+        <translation>上次会话结束时，此次传输尚未完成。</translation>
+    </message>
+    <message>
+        <source>Could not save file transfer history. Check available disk space and folder permissions.</source>
+        <translation>无法保存文件传输记录，请检查可用磁盘空间和文件夹权限。</translation>
+    </message>
+    <message>
+        <source>Invalid cached transfer identifier.</source>
+        <translation>缓存项目标识无效。</translation>
+    </message>
+    <message>
+        <source>Wait for file transfers and cache statistics to finish before clearing the cache.</source>
+        <translation>请等待文件传输和缓存统计完成后，再清理缓存。</translation>
+    </message>
+    <message>
+        <source>The managed cache directory cannot be a symbolic link.</source>
+        <translation>受管理的缓存目录不能是符号链接。</translation>
+    </message>
+    <message>
+        <source>This cached transfer is still referenced by the clipboard or contains manually saved files.</source>
+        <translation>此缓存仍被剪贴板引用，或其中包含手动保存的文件。</translation>
+    </message>
+    <message>
+        <source>A cache folder contains unsupported links or too many entries to remove safely.</source>
+        <translation>缓存文件夹包含不支持的链接，或项目数量过多，无法安全删除。</translation>
+    </message>
+    <message>
+        <source>A cache folder changed while cleanup was running.</source>
+        <translation>清理过程中，缓存文件夹发生了变化。</translation>
+    </message>
+    <message>
+        <source>Cannot protect a manual destination inside the managed cache. Choose another folder.</source>
+        <translation>无法保护位于受管理缓存内的手动保存位置，请选择其他文件夹。</translation>
+    </message>
+    <message>
+        <source>Move manually saved files out of the cache directory before cleaning it.</source>
+        <translation>请先将手动保存的文件移出缓存目录，再进行清理。</translation>
+    </message>
     <message>
         <source>Superseded by a newer file clipboard.</source>
         <translation>已由更新的文件剪贴板取代。</translation>
@@ -1881,7 +2371,7 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Wait for file transfers to finish before clearing the clipboard cache.</source>
-        <translation>请等待文件传输完成后再清理剪贴板缓存。</translation>
+        <translation type="vanished">请等待文件传输完成后再清理剪贴板缓存。</translation>
     </message>
     <message>
         <source>The clipboard is busy; retry clearing the cache.</source>

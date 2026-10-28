@@ -7,6 +7,7 @@
 #pragma once
 
 #include <QStatusBar>
+#include <QStringList>
 
 #include "common/Enums.h"
 
@@ -40,6 +41,8 @@ protected:
   void changeEvent(QEvent *e) override;
 
 private:
+  friend class StatusBarTests;
+  void renderStatus();
   void updateText();
   void updateTimerLabel();
   QPushButton *m_btnFingerprint = nullptr;
@@ -49,5 +52,9 @@ private:
   bool m_encrypted = false;
   QString m_securityLevel;
   int m_connectionInterval = -1;
+  ConnectionState m_connectionState = ConnectionState::Disconnected;
+  ProcessState m_processState = ProcessState::Stopped;
+  bool m_isServer = false;
+  QStringList m_serverClients;
   QTimer *m_retryTimer = nullptr;
 };

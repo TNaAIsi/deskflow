@@ -19,6 +19,10 @@ if (OSX_BUNDLE)
     @ONLY
   )
   install(SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/deploy-bundle.cmake)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  configure_file(${MY_DIR}/native-keyboard-package.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/native-keyboard-package.cmake @ONLY)
+  install(SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/native-keyboard-package.cmake)
   set(CPACK_PACKAGE_ICON "${MY_DIR}/dmg-volume.icns")
   set(CPACK_DMG_BACKGROUND_IMAGE "${MY_DIR}/dmg-background.tiff")
   set(CPACK_DMG_DS_STORE_SETUP_SCRIPT "${MY_DIR}/generate_ds_store.applescript")

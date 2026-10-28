@@ -225,6 +225,52 @@ private Q_SLOTS:
     QCOMPARE(QApplication::clipboard()->text(), QString("keep my newer clipboard"));
     QVERIFY(nativeClipboardFiles().paths.isEmpty());
   }
+
+  void currentNativeFilesProtectCacheAfterServiceRestart()
+  {
+    QTemporaryDir sourceFiles, sourceStore, receivedStore;
+    ClipboardRestore restore;
+    const auto source = sourceFiles.filePath("restart-protected.bin");
+    QVERIFY(writeFile(source));
+    QApplication::clipboard()->setText("baseline");
+    QString cacheId, receivedPath;
+    {
+      FileTransferService sender(nullptr, sourceStore.path()), receiver(nullptr, receivedStore.path());
+      receiver.setClipboardEnabled(true);
+      receiver.publishClipboardOffer();
+      int receiverOffers = 0;
+      QJsonObject completed;
+      connectEngines(sender, receiver, receiverOffers);
+      connect(&receiver, &FileTransferService::progressChanged, this, [&completed](const QJsonObject &progress) {
+        if (progress.value("state") == "complete")
+          completed = progress;
+      });
+      sender.offerFiles({source}, "receiver");
+      QTRY_VERIFY_WITH_TIMEOUT(!completed.isEmpty(), 10000);
+      cacheId = completed.value("cacheId").toString();
+      receivedPath = completed.value("localPaths").toArray().first().toString();
+      QVERIFY(!cacheId.isEmpty());
+      QCOMPARE(nativeClipboardFiles().paths, QStringList{receivedPath});
+    }
+    FileTransferService reopened(nullptr, receivedStore.path());
+    reopened.refreshFileState();
+    QTRY_VERIFY_WITH_TIMEOUT(!reopened.cacheState().value("scanning").toBool(), 5000);
+    QVERIFY(!reopened.history().isEmpty());
+    QSignalSpy errors(&reopened, &FileTransferService::error);
+    reopened.removeClipboardCacheEntry(cacheId);
+    QVERIFY(!errors.isEmpty());
+    QVERIFY(QFileInfo::exists(receivedPath));
+    reopened.clearClipboardCache();
+    QTRY_VERIFY_WITH_TIMEOUT(!reopened.cacheState().value("mutating").toBool(), 5000);
+    QVERIFY(QFileInfo::exists(receivedPath));
+
+    QApplication::clipboard()->setText("a newer copy no longer references those files");
+    reopened.refreshFileState();
+    QTRY_VERIFY_WITH_TIMEOUT(!reopened.cacheState().value("scanning").toBool(), 5000);
+    reopened.removeClipboardCacheEntry(cacheId);
+    QTRY_VERIFY_WITH_TIMEOUT(!QFileInfo::exists(receivedPath), 5000);
+    QVERIFY(QFileInfo::exists(source));
+  }
 };
 QTEST_MAIN(FileClipboardIntegrationTests)
 #include "FileClipboardIntegrationTests.moc"

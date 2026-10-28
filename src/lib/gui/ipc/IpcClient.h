@@ -7,6 +7,7 @@
 #pragma once
 
 #include <QObject>
+#include <QTimer>
 
 class QLocalSocket;
 
@@ -26,7 +27,14 @@ class IpcClient : public QObject
   };
 
 public:
-  explicit IpcClient(QObject *parent, const QString &socketName, const QString &typeName);
+  enum class Purpose
+  {
+    Interface,
+    Background
+  };
+  explicit IpcClient(
+      QObject *parent, const QString &socketName, const QString &typeName, Purpose purpose = Purpose::Interface
+  );
   void connectToServer();
   void disconnectFromServer();
 
@@ -68,7 +76,9 @@ private:
   QString m_socketName;
   QByteArray m_readBuffer;
   int m_retryCount{0};
+  QTimer m_retryTimer;
   QString m_typeName;
+  Purpose m_purpose;
 };
 
 } // namespace deskflow::gui::ipc

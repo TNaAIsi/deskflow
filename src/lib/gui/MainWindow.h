@@ -46,7 +46,6 @@ class CoreIpcClient;
 } // namespace deskflow::gui::ipc
 namespace deskflow::workspace {
 class WorkspaceService;
-class DisplayLayoutDialog;
 } // namespace deskflow::workspace
 
 class MainWindow : public QMainWindow
@@ -100,7 +99,8 @@ private:
   void coreProcessStateChanged(ProcessState state);
   void syncWorkspace();
   void syncWorkspaceTopology();
-  void showDisplayLayout();
+  void setupNativeKeyboard();
+  QString nativeKeyboardUiStatus() const;
   QJsonObject displayLayoutState() const;
   void connectLayoutEntry(ServerConfigDialog &dialog);
 
@@ -196,9 +196,9 @@ private:
   deskflow::gui::ipc::DaemonIpcClient *m_daemonIpcClient = nullptr;
   deskflow::gui::ipc::CoreIpcClient *m_workspaceCoreIpc = nullptr;
   QPointer<deskflow::workspace::WorkspaceService> m_workspaceService;
-  QPointer<deskflow::workspace::DisplayLayoutDialog> m_displayLayoutDialog;
   QJsonObject m_lastWorkspaceRuntime;
   bool m_workspaceServer = false;
+  QString m_nativeKeyboardMode;
 
   LogDock *m_logDock;
   StatusBar *m_statusBar = nullptr;

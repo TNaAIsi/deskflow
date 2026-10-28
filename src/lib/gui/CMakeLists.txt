@@ -69,8 +69,6 @@ add_library(${target} STATIC
   dialogs/SettingsDialog.cpp
   dialogs/SettingsDialog.h
   dialogs/SettingsDialog.ui
-  dialogs/WorkspaceDialog.cpp
-  dialogs/WorkspaceDialog.h
   ipc/IpcClient.cpp
   ipc/IpcClient.h
   ipc/DaemonIpcClient.cpp
@@ -117,6 +115,8 @@ add_library(${target} STATIC
   widgets/StatusBar.h
   widgets/SettingsDialogButtonBox.cpp
   widgets/SettingsDialogButtonBox.h
+  widgets/SharingSettingsWidget.cpp
+  widgets/SharingSettingsWidget.h
 )
 
 target_link_libraries(${target}

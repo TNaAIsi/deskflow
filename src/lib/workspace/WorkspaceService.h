@@ -45,7 +45,6 @@ private:
   QTimer m_offerRetry;
   QJsonObject m_pendingOffers;
   QJsonObject m_options;
-  QJsonObject m_transfers;
   QJsonObject m_offers;
   QStringList m_errors;
   QString m_audioStatus;
@@ -53,6 +52,7 @@ private:
   QString m_remoteLayoutMode;
   bool m_server;
   bool m_started = false;
+  bool m_initialized = false;
   quint16 m_port = 0;
 };
 } // namespace deskflow::workspace

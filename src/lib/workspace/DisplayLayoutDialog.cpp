@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSet>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -120,12 +121,13 @@ private:
 
 } // namespace
 
-DisplayLayoutDialog::DisplayLayoutDialog(const QJsonObject &state, QWidget *parent)
-    : QDialog(parent),
+DisplayLayoutWidget::DisplayLayoutWidget(const QJsonObject &state, QWidget *parent)
+    : QWidget(parent),
       m_state(state),
       m_scene(new QGraphicsScene(this)),
       m_view(new QGraphicsView(m_scene, this)),
       m_enabled(new QCheckBox(tr("Arrange and route each monitor separately"), this)),
+      m_canvasControls(new QWidget(this)),
       m_selection(new QLabel(this)),
       m_saveError(new QLabel(this)),
       m_x(new QDoubleSpinBox(this)),
@@ -133,9 +135,9 @@ DisplayLayoutDialog::DisplayLayoutDialog(const QJsonObject &state, QWidget *pare
       m_width(new QDoubleSpinBox(this)),
       m_height(new QDoubleSpinBox(this))
 {
-  setWindowTitle(tr("Individual monitor layout"));
-  resize(1050, 680);
+  setObjectName("displayLayoutEditor");
   auto *layout = new QVBoxLayout(this);
+  layout->setContentsMargins(0, 0, 0, 0);
   auto *instructions = new QLabel(
       tr("Drag each monitor to match your desk. Touching edges connect; colours identify computers. "
          "You can place a Mac monitor between two Windows monitors. This does not change system display settings."),
@@ -149,7 +151,7 @@ DisplayLayoutDialog::DisplayLayoutDialog(const QJsonObject &state, QWidget *pare
   auto *modeHelp = new QLabel(
       tr("When enabled, this canvas controls pointer directions and the computer grid is inactive. Devices without "
          "display information stay outside automatic switching. Disable this option to use the computer grid again; "
-         "your monitor positions are kept. Saving here applies immediately."),
+         "your monitor positions are kept. Changes are applied with the configuration dialog Save button."),
       this
   );
   modeHelp->setWordWrap(true);
@@ -158,10 +160,15 @@ DisplayLayoutDialog::DisplayLayoutDialog(const QJsonObject &state, QWidget *pare
   m_saveError->setWordWrap(true);
   m_saveError->hide();
   layout->addWidget(m_saveError);
+  auto *canvasLayout = new QVBoxLayout(m_canvasControls);
+  canvasLayout->setContentsMargins(0, 0, 0, 0);
+  layout->addWidget(m_canvasControls, 1);
+  m_canvasControls->setVisible(m_enabled->isChecked());
+  m_view->setObjectName("displayLayoutCanvas");
   m_view->setRenderHint(QPainter::Antialiasing);
   m_view->setDragMode(QGraphicsView::RubberBandDrag);
-  m_view->setMinimumHeight(360);
-  layout->addWidget(m_view, 1);
+  m_view->setMinimumHeight(220);
+  canvasLayout->addWidget(m_view, 1);
   auto *row = new QHBoxLayout;
   auto *identify = new QPushButton(tr("Identify selected"), this);
   auto *fit = new QPushButton(tr("Fit monitors"), this);
@@ -170,10 +177,16 @@ DisplayLayoutDialog::DisplayLayoutDialog(const QJsonObject &state, QWidget *pare
   row->addWidget(fit);
   row->addWidget(arrangeButton);
   row->addStretch();
-  layout->addLayout(row);
-  layout->addWidget(m_selection);
+  canvasLayout->addLayout(row);
+  canvasLayout->addWidget(m_selection);
   auto *coordinates = new QHBoxLayout;
   const auto addCoordinate = [&](const QString &label, QDoubleSpinBox *spin, bool size) {
+    spin->setObjectName(
+        label == tr("X")          ? "displayCanvasX"
+        : label == tr("Y")        ? "displayCanvasY"
+        : size && spin == m_width ? "displayCanvasWidth"
+                                  : "displayCanvasHeight"
+    );
     spin->setDecimals(0);
     spin->setRange(size ? 1 : -1000000, 1000000);
     spin->setSingleStep(10);
@@ -185,14 +198,15 @@ DisplayLayoutDialog::DisplayLayoutDialog(const QJsonObject &state, QWidget *pare
   addCoordinate(tr("Y"), m_y, false);
   addCoordinate(tr("Width"), m_width, true);
   addCoordinate(tr("Height"), m_height, true);
-  layout->addLayout(coordinates);
-  auto *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);
-  layout->addWidget(buttons);
-  connect(buttons, &QDialogButtonBox::accepted, this, &DisplayLayoutDialog::save);
-  connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-  connect(m_scene, &QGraphicsScene::selectionChanged, this, &DisplayLayoutDialog::updateSelection);
-  connect(fit, &QPushButton::clicked, this, &DisplayLayoutDialog::fitDisplays);
-  connect(arrangeButton, &QPushButton::clicked, this, &DisplayLayoutDialog::arrange);
+  canvasLayout->addLayout(coordinates);
+  connect(m_enabled, &QCheckBox::toggled, this, [this](bool enabled) {
+    m_canvasControls->setVisible(enabled);
+    edited();
+    QTimer::singleShot(0, this, &DisplayLayoutWidget::fitDisplays);
+  });
+  connect(m_scene, &QGraphicsScene::selectionChanged, this, &DisplayLayoutWidget::updateSelection);
+  connect(fit, &QPushButton::clicked, this, &DisplayLayoutWidget::fitDisplays);
+  connect(arrangeButton, &QPushButton::clicked, this, &DisplayLayoutWidget::arrange);
   connect(identify, &QPushButton::clicked, this, [this] {
     for (auto *item : m_scene->selectedItems()) {
       if (auto *display = dynamic_cast<DisplayItem *>(item)) {
@@ -202,10 +216,19 @@ DisplayLayoutDialog::DisplayLayoutDialog(const QJsonObject &state, QWidget *pare
     }
   });
   loadItems();
-  QTimer::singleShot(0, this, &DisplayLayoutDialog::fitDisplays);
+  QTimer::singleShot(0, this, &DisplayLayoutWidget::fitDisplays);
 }
 
-void DisplayLayoutDialog::loadItems()
+DisplayLayoutWidget::~DisplayLayoutWidget()
+{
+  // QGraphicsScene can emit selectionChanged while QWidget deletes children,
+  // after this derived widget's destructor has already completed.
+  disconnect(m_scene, nullptr, this, nullptr);
+  m_scene->blockSignals(true);
+  m_view->setScene(nullptr);
+}
+
+void DisplayLayoutWidget::loadItems()
 {
   m_loading = true;
   m_scene->clear();
@@ -213,13 +236,16 @@ void DisplayLayoutDialog::loadItems()
   for (const auto &value : m_state.value("displays").toArray()) {
     const auto display = value.toObject();
     const int number = ++numbers[display.value("device").toString()];
-    m_scene->addItem(new DisplayItem(display, number, [this] { updateSelection(); }));
+    m_scene->addItem(new DisplayItem(display, number, [this] {
+      updateSelection();
+      edited();
+    }));
   }
   m_loading = false;
   updateSelection();
 }
 
-void DisplayLayoutDialog::fitDisplays()
+void DisplayLayoutWidget::fitDisplays()
 {
   const auto bounds = m_scene->itemsBoundingRect();
   if (!bounds.isEmpty()) {
@@ -228,7 +254,7 @@ void DisplayLayoutDialog::fitDisplays()
   }
 }
 
-void DisplayLayoutDialog::updateSelection()
+void DisplayLayoutWidget::updateSelection()
 {
   if (m_loading)
     return;
@@ -254,7 +280,7 @@ void DisplayLayoutDialog::updateSelection()
   m_loading = false;
 }
 
-void DisplayLayoutDialog::editSelection()
+void DisplayLayoutWidget::editSelection()
 {
   if (m_loading)
     return;
@@ -270,9 +296,10 @@ void DisplayLayoutDialog::editSelection()
   }
   m_loading = false;
   updateSelection();
+  edited();
 }
 
-void DisplayLayoutDialog::arrange()
+void DisplayLayoutWidget::arrange()
 {
   auto displays = m_scene->items();
   std::sort(displays.begin(), displays.end(), [](auto *left, auto *right) {
@@ -291,47 +318,160 @@ void DisplayLayoutDialog::arrange()
   m_loading = false;
   updateSelection();
   fitDisplays();
+  edited();
+}
+
+namespace {
+QString displayIdentity(const QJsonObject &display)
+{
+  return display.value("device").toString() + QChar(0x1f) + display.value("id").toString();
+}
+QJsonObject placements(const QJsonObject &state)
+{
+  QJsonObject result;
+  for (const auto &value : state.value("displays").toArray()) {
+    const auto display = value.toObject();
+    result.insert(displayIdentity(display), display.value("canvas"));
+  }
+  return result;
+}
+} // namespace
+
+QJsonObject DisplayLayoutWidget::layoutState() const
+{
+  QJsonArray array;
+  for (auto *item : m_scene->items())
+    if (const auto *display = dynamic_cast<DisplayItem *>(item))
+      array.append(display->display());
+  auto result = m_state;
+  result["version"] = 1;
+  result["enabled"] = m_enabled->isChecked();
+  result["displays"] = array;
+  return result;
+}
+
+bool DisplayLayoutWidget::independentEnabled() const
+{
+  return m_enabled->isChecked();
+}
+
+bool DisplayLayoutWidget::isModified() const
+{
+  const auto staged = layoutState();
+  return staged.value("enabled").toBool() != m_state.value("enabled").toBool() ||
+         placements(staged) != placements(m_state);
+}
+
+void DisplayLayoutWidget::setState(const QJsonObject &state, bool preserveEdits)
+{
+  const auto staged = layoutState();
+  const auto originalPlacements = placements(m_state);
+  const auto stagedPlacements = placements(staged);
+  const bool enabledChanged = staged.value("enabled").toBool() != m_state.value("enabled").toBool();
+  auto visible = state;
+  auto displays = visible.value("displays").toArray();
+  QSet<QString> liveKeys;
+  for (qsizetype index = 0; index < displays.size(); ++index) {
+    auto display = displays.at(index).toObject();
+    const auto key = displayIdentity(display);
+    liveKeys.insert(key);
+    if (preserveEdits && stagedPlacements.contains(key) && stagedPlacements.value(key) != originalPlacements.value(key))
+      display["canvas"] = stagedPlacements.value(key);
+    displays[index] = display;
+  }
+  if (preserveEdits)
+    for (const auto &value : staged.value("displays").toArray()) {
+      auto display = value.toObject();
+      const auto key = displayIdentity(display);
+      if (!liveKeys.contains(key) && stagedPlacements.value(key) != originalPlacements.value(key)) {
+        display["connected"] = false;
+        displays.append(display);
+      }
+    }
+  visible["displays"] = displays;
+  m_loading = true;
+  m_enabled->setChecked(
+      preserveEdits && enabledChanged ? staged.value("enabled").toBool() : state.value("enabled").toBool()
+  );
+  m_canvasControls->setVisible(m_enabled->isChecked());
+  m_state = visible;
+  loadItems();
+  // The baseline contains current native metadata, but never staged coordinates.
+  m_state = state;
+  m_loading = false;
+  setSaveError({});
+  QTimer::singleShot(0, this, &DisplayLayoutWidget::fitDisplays);
+  Q_EMIT changed();
+}
+
+bool DisplayLayoutWidget::validate(QString *message) const
+{
+  QList<QRectF> occupied;
+  if (!m_enabled->isChecked())
+    return true;
+  for (auto *item : m_scene->items()) {
+    const auto *display = dynamic_cast<DisplayItem *>(item);
+    if (!display || !display->display().value("connected").toBool(true))
+      continue;
+    const auto rectangle = display->rect().translated(display->pos());
+    for (const auto &other : occupied) {
+      const auto overlap = rectangle.intersected(other);
+      if (overlap.width() > 2 && overlap.height() > 2) {
+        if (message)
+          *message = tr("Move the monitors so their interiors do not overlap. Touching edges are allowed.");
+        return false;
+      }
+    }
+    occupied.append(rectangle);
+  }
+  return true;
+}
+
+void DisplayLayoutWidget::setSaveError(const QString &message)
+{
+  m_saveError->setText(message);
+  m_saveError->setVisible(!message.isEmpty());
+}
+
+void DisplayLayoutWidget::edited()
+{
+  if (m_loading)
+    return;
+  setSaveError({});
+  Q_EMIT changed();
+}
+
+DisplayLayoutDialog::DisplayLayoutDialog(const QJsonObject &state, QWidget *parent)
+    : QDialog(parent),
+      m_editor(new DisplayLayoutWidget(state, this))
+{
+  setWindowTitle(tr("Individual monitor layout"));
+  resize(1050, 680);
+  auto *layout = new QVBoxLayout(this);
+  layout->addWidget(m_editor, 1);
+  auto *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);
+  layout->addWidget(buttons);
+  connect(buttons, &QDialogButtonBox::accepted, this, &DisplayLayoutDialog::save);
+  connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+  connect(m_editor, &DisplayLayoutWidget::requestIdentify, this, &DisplayLayoutDialog::requestIdentify);
 }
 
 void DisplayLayoutDialog::setSaveError(const QString &message)
 {
   m_saveRejected = true;
-  m_saveError->setText(message);
-  m_saveError->setVisible(!message.isEmpty());
+  m_editor->setSaveError(message);
 }
 
 void DisplayLayoutDialog::save()
 {
   m_saveRejected = false;
-  m_saveError->clear();
-  m_saveError->hide();
-  QJsonArray array;
-  QList<QRectF> occupied;
-  for (auto *item : m_scene->items()) {
-    auto *display = dynamic_cast<DisplayItem *>(item);
-    if (!display)
-      continue;
-    const auto rectangle = display->rect().translated(display->pos());
-    if (m_enabled->isChecked() && display->display().value("connected").toBool(true)) {
-      for (const auto &other : occupied) {
-        const auto intersection = rectangle.intersected(other);
-        if (intersection.width() > 2 && intersection.height() > 2) {
-          QMessageBox::warning(
-              this, tr("Overlapping monitors"),
-              tr("Move the monitors so their interiors do not overlap. Touching edges are allowed.")
-          );
-          return;
-        }
-      }
-      occupied.append(rectangle);
-    }
-    array.append(display->display());
+  m_editor->setSaveError({});
+  QString error;
+  if (!m_editor->validate(&error)) {
+    setSaveError(error);
+    return;
   }
-  auto result = m_state;
-  result["version"] = 1;
-  result["enabled"] = m_enabled->isChecked();
-  result["displays"] = array;
-  Q_EMIT saved(result);
+  Q_EMIT saved(m_editor->layoutState());
   if (!m_saveRejected)
     accept();
 }

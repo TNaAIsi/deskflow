@@ -162,6 +162,9 @@ public:
   destroyed when the client disconnects or is disconnected.
   */
   void adoptClient(BaseClientProxy *client);
+  // Called on the server event thread when a negotiated receiver changes its
+  // native-input readiness while it owns the cursor.
+  void refreshPhysicalKeyboardCapture();
 
   //! Disconnect clients
   /*!

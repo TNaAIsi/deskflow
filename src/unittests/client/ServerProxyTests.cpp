@@ -10,12 +10,14 @@
 #include "base/IEventQueue.h"
 #include "client/Client.h"
 #include "client/ServerProxy.h"
+#include "client/ServerProxy1_10.h"
 #include "client/ServerProxy1_9.h"
 #include "deskflow/AppUtil.h"
 #include "deskflow/DeskflowException.h"
 #include "deskflow/ProtocolTypes.h"
 #include "deskflow/ProtocolUtil.h"
 #include "io/IStream.h"
+#include "platform/NativeKeyboard.h"
 
 #include <QScopeGuard>
 #include <QTest>
@@ -270,6 +272,53 @@ public:
   }
 };
 
+class TestNativeServerProxy : public ServerProxy1_10
+{
+public:
+  using ServerProxy1_10::ServerProxy1_10;
+  bool parse(const char *code)
+  {
+    return parseMessage(reinterpret_cast<const uint8_t *>(code)) == ConnectionResult::Okay;
+  }
+  bool capability()
+  {
+    return parseHandshakeMessage(reinterpret_cast<const uint8_t *>(kMsgNativeKeyboardCapability)) ==
+           ConnectionResult::Okay;
+  }
+  void mapping(const OptionsList &options)
+  {
+    updateModifierTranslation(options);
+  }
+};
+
+struct FakeNativeKeyboard
+{
+  bool available = true;
+  bool accept = true;
+  int releases = 0;
+  int legacyReleases = 0;
+  std::vector<std::tuple<uint16_t, uint16_t, bool>> events;
+  ServerProxy1_10::Backend backend()
+  {
+    return {
+        [this] { return available; },
+        [this](uint16_t page, uint16_t usage, bool down) {
+          if (!accept)
+            return false;
+          events.emplace_back(page, usage, down);
+          return true;
+        },
+        [this] { ++releases; }, [this] { ++legacyReleases; }, [](const QString &) {}
+    };
+  }
+};
+
+template <typename... Arguments> void pushNative(FakeStream &stream, const char *format, Arguments... values)
+{
+  ProtocolUtil::writef(&stream, format, values...);
+  stream.push(stream.takeWritten().substr(4));
+}
+
 Client *undereferenceableClient()
 {
   // These paths must queue cleanup without calling through to Client.
@@ -413,6 +462,167 @@ void ServerProxyTests::audio_malformedConfigurationDoesNotSignalReady()
 
   QVERIFY_THROWS_EXCEPTION(BadClientException, proxy.configureAudio());
   QVERIFY(stream.takeWritten().empty());
+}
+
+void ServerProxyTests::nativeKeyboardRequiresBothCapabilityAndReadyBackend()
+{
+  RecordingEventQueue events;
+  FakeStream stream;
+  FakeNativeKeyboard keyboard;
+  TestNativeServerProxy proxy(undereferenceableClient(), &stream, &events, keyboard.backend(), true);
+  pushNative(stream, kMsgNativeKeyboardCapability, 0);
+  QVERIFY(proxy.capability());
+  QCOMPARE(stream.takeWritten(), std::string("NKRD\0", 5));
+  keyboard.available = false;
+  pushNative(stream, kMsgNativeKeyboardCapability, 1);
+  QVERIFY(proxy.capability());
+  QCOMPARE(stream.takeWritten(), std::string("NKRD\0", 5));
+  keyboard.available = true;
+  pushNative(stream, kMsgNativeKeyboardCapability, 1);
+  QVERIFY(proxy.capability());
+  QCOMPARE(stream.takeWritten(), std::string("NKRD\1", 5));
+  QVERIFY(keyboard.events.empty());
+}
+
+void ServerProxyTests::nativeKeyboardPreservesPhysicalPressReleaseAndLocalRepeat()
+{
+  RecordingEventQueue events;
+  FakeStream stream;
+  FakeNativeKeyboard keyboard;
+  TestNativeServerProxy proxy(undereferenceableClient(), &stream, &events, keyboard.backend(), true);
+  pushNative(stream, kMsgNativeKeyboardCapability, 1);
+  QVERIFY(proxy.capability());
+  QVERIFY(!deskflow::nativeKeyboardSessionActive());
+  stream.takeWritten();
+  pushNative(stream, kMsgNativeKeyboardSession, 1, 0);
+  QVERIFY(proxy.parse(kMsgNativeKeyboardSession));
+  QVERIFY(deskflow::nativeKeyboardSessionActive());
+  // A dead-key position is passed as a key, independently of its character.
+  pushNative(stream, kMsgNativePhysicalKey, 7, 0x34, 1);
+  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
+  pushNative(stream, kMsgNativePhysicalKey, 7, 0x34, 1);
+  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
+  pushNative(stream, kMsgNativePhysicalKey, 7, 0x34, 0);
+  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
+  pushNative(stream, kMsgNativePhysicalKey, 7, 0x34, 0);
+  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
+  QCOMPARE(keyboard.events.size(), size_t(2));
+  QCOMPARE(keyboard.events[0], std::make_tuple(uint16_t(7), uint16_t(0x34), true));
+  QCOMPARE(keyboard.events[1], std::make_tuple(uint16_t(7), uint16_t(0x34), false));
+  QCOMPARE(keyboard.legacyReleases, 1);
+  pushNative(stream, kMsgNativeKeyboardSession, 0, 0);
+  QVERIFY(proxy.parse(kMsgNativeKeyboardSession));
+  QVERIFY(!deskflow::nativeKeyboardSessionActive());
+  QVERIFY(keyboard.releases >= 2);
+}
+
+void ServerProxyTests::nativeKeyboardCarriesInitialModifiersAndRespectsRemaps()
+{
+  RecordingEventQueue events;
+  FakeStream stream;
+  FakeNativeKeyboard keyboard;
+  TestNativeServerProxy proxy(undereferenceableClient(), &stream, &events, keyboard.backend(), true);
+  proxy.mapping({kOptionModifierMapForControl, kKeyModifierIDSuper});
+  pushNative(stream, kMsgNativeKeyboardCapability, 1);
+  QVERIFY(proxy.capability());
+  stream.takeWritten();
+  pushNative(stream, kMsgNativeKeyboardSession, 1, 1);
+  QVERIFY(proxy.parse(kMsgNativeKeyboardSession));
+  QCOMPARE(keyboard.events.front(), std::make_tuple(uint16_t(7), uint16_t(0xe3), true));
+  // Both source Control and Win map to the same target GUI key. Releasing one
+  // source must not release the target while the other is still physically held.
+  pushNative(stream, kMsgNativePhysicalKey, 7, 0xe3, 1);
+  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
+  pushNative(stream, kMsgNativePhysicalKey, 7, 0xe0, 0);
+  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
+  QCOMPARE(keyboard.events.size(), size_t(1));
+  // A remap update while held does not change which key must be released.
+  proxy.mapping({kOptionModifierMapForSuper, kKeyModifierIDAlt});
+  pushNative(stream, kMsgNativePhysicalKey, 7, 0xe3, 0);
+  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
+  QCOMPARE(keyboard.events.size(), size_t(2));
+  QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), uint16_t(0xe3), false));
+  proxy.mapping({kOptionModifierMapForAltGr, kKeyModifierIDControl});
+  pushNative(stream, kMsgNativePhysicalKey, 7, 0xe6, 1);
+  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
+  QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), uint16_t(0xe4), true));
+  pushNative(stream, kMsgNativePhysicalKey, 7, 0xe6, 0);
+  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
+  QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), uint16_t(0xe4), false));
+}
+
+void ServerProxyTests::nativeKeyboardFailureReleasesEverything()
+{
+  RecordingEventQueue events;
+  FakeStream stream;
+  FakeNativeKeyboard keyboard;
+  TestNativeServerProxy proxy(undereferenceableClient(), &stream, &events, keyboard.backend(), true);
+  pushNative(stream, kMsgNativeKeyboardCapability, 1);
+  QVERIFY(proxy.capability());
+  stream.takeWritten();
+  pushNative(stream, kMsgNativeKeyboardSession, 1, 0);
+  QVERIFY(proxy.parse(kMsgNativeKeyboardSession));
+  keyboard.accept = false;
+  const int before = keyboard.releases;
+  pushNative(stream, kMsgNativePhysicalKey, 7, 4, 1);
+  QVERIFY_THROWS_EXCEPTION(BadClientException, proxy.parse(kMsgNativePhysicalKey));
+  QVERIFY(keyboard.releases > before);
+  QVERIFY(!deskflow::nativeKeyboardSessionActive());
+  // The failed session cannot continue with an up or another down.
+  pushNative(stream, kMsgNativePhysicalKey, 7, 4, 0);
+  QVERIFY_THROWS_EXCEPTION(BadClientException, proxy.parse(kMsgNativePhysicalKey));
+}
+
+void ServerProxyTests::nativeKeyboardRejectsLegacyOrUnnegotiatedMessages()
+{
+  RecordingEventQueue events;
+  FakeStream stream;
+  FakeNativeKeyboard keyboard;
+  TestNativeServerProxy proxy(undereferenceableClient(), &stream, &events, keyboard.backend(), true);
+  pushNative(stream, kMsgNativePhysicalKey, 7, 4, 1);
+  QVERIFY_THROWS_EXCEPTION(BadClientException, proxy.parse(kMsgNativePhysicalKey));
+  pushNative(stream, kMsgNativeKeyboardCapability, 1);
+  QVERIFY(proxy.capability());
+  stream.takeWritten();
+  pushNative(stream, kMsgNativeKeyboardSession, 1, 0);
+  QVERIFY(proxy.parse(kMsgNativeKeyboardSession));
+  QVERIFY_THROWS_EXCEPTION(BadClientException, proxy.parse(kMsgDKeyDown));
+  pushNative(stream, kMsgNativePhysicalKey, 1, 0x82, 1);
+  QVERIFY_THROWS_EXCEPTION(BadClientException, proxy.parse(kMsgNativePhysicalKey));
+  pushNative(stream, kMsgNativeKeyboardSession, 1, 0);
+  QVERIFY(proxy.parse(kMsgNativeKeyboardSession));
+  QVERIFY_THROWS_EXCEPTION(BadClientException, proxy.parse("ZZZZ"));
+}
+
+void ServerProxyTests::nativeKeyboardActionsDoNotReleasePhysicalModifiers()
+{
+  RecordingEventQueue events;
+  FakeStream stream;
+  FakeNativeKeyboard keyboard;
+  TestNativeServerProxy proxy(undereferenceableClient(), &stream, &events, keyboard.backend(), true);
+  proxy.mapping({kOptionModifierMapForControl, kKeyModifierIDSuper});
+  pushNative(stream, kMsgNativeKeyboardCapability, 1);
+  QVERIFY(proxy.capability());
+  stream.takeWritten();
+  pushNative(stream, kMsgNativeKeyboardSession, 1, 1);
+  QVERIFY(proxy.parse(kMsgNativeKeyboardSession));
+  pushNative(stream, kMsgNativeSyntheticKey, uint32_t('c'), KeyModifierControl, 1);
+  QVERIFY(proxy.parse(kMsgNativeSyntheticKey));
+  pushNative(stream, kMsgNativeSyntheticKey, uint32_t('c'), KeyModifierControl, 0);
+  QVERIFY(proxy.parse(kMsgNativeSyntheticKey));
+  QCOMPARE(keyboard.events.size(), size_t(3));
+  QCOMPARE(keyboard.events[0], std::make_tuple(uint16_t(7), uint16_t(0xe3), true));
+  QCOMPARE(keyboard.events[1], std::make_tuple(uint16_t(7), uint16_t(6), true));
+  QCOMPARE(keyboard.events[2], std::make_tuple(uint16_t(7), uint16_t(6), false));
+  pushNative(stream, kMsgNativePhysicalKey, 7, 0xe0, 0);
+  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
+  QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), uint16_t(0xe3), false));
+  pushNative(stream, kMsgNativeSyntheticKey, kKeySetModifiers, KeyModifierControl, 1);
+  QVERIFY(proxy.parse(kMsgNativeSyntheticKey));
+  pushNative(stream, kMsgNativeSyntheticKey, kKeyClearModifiers, KeyModifierControl, 1);
+  QVERIFY(proxy.parse(kMsgNativeSyntheticKey));
+  QCOMPARE(keyboard.events[keyboard.events.size() - 2], std::make_tuple(uint16_t(7), uint16_t(0xe3), true));
+  QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), uint16_t(0xe3), false));
 }
 
 QTEST_MAIN(ServerProxyTests)

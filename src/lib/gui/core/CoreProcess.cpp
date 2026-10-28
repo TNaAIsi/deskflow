@@ -99,14 +99,18 @@ QString CoreProcess::wrapIpv6(const QString &address)
 // CoreProcess
 //
 
-CoreProcess::CoreProcess(const ServerConfig &serverConfig)
+CoreProcess::CoreProcess(const ServerConfig &serverConfig, const QString &ipcServerName)
     : m_serverConfig(serverConfig),
+      m_coreIpcServerName(ipcServerName),
       m_daemonIpcClient{new ipc::DaemonIpcClient(this)}
 {
   m_appPath = QStringLiteral("%1/%2").arg(QCoreApplication::applicationDirPath(), kCoreBinName);
   if (!QFile::exists(m_appPath)) {
     qCritical("core server binary does not exist");
   }
+
+  m_coreIpcRetryTimer.setSingleShot(true);
+  connect(&m_coreIpcRetryTimer, &QTimer::timeout, this, &CoreProcess::connectCoreIpc);
 
   connect(m_daemonIpcClient, &ipc::DaemonIpcClient::connected, this, &CoreProcess::daemonIpcClientConnected);
   connect(
@@ -147,9 +151,11 @@ void CoreProcess::checkExistingProcess()
 {
   qInfo("checking existing core");
 
-  auto *client = new ipc::CoreIpcClient(this);
-  connect(client, &ipc::CoreIpcClient::connected, this, [client] {
-    qInfo("existing core has matching version, leaving it running");
+  auto *client = new ipc::CoreIpcClient(this, m_coreIpcServerName, ipc::IpcClient::Purpose::Background);
+  connect(client, &ipc::CoreIpcClient::connected, this, [this, client] {
+    qInfo("existing core has matching version, observing its current connection state");
+    m_adoptedCore = true;
+    setProcessState(ProcessState::Started);
     client->deleteLater();
   });
   connect(client, &ipc::CoreIpcClient::versionMismatch, this, [client] {
@@ -172,6 +178,8 @@ void CoreProcess::checkExistingProcess()
 
 void CoreProcess::onProcessFinished(int exitCode, QProcess::ExitStatus)
 {
+  if (const auto *process = qobject_cast<QProcess *>(sender()); process && process != m_process)
+    return;
   using enum ProcessState;
   setConnectionState(ConnectionState::Disconnected);
 
@@ -273,6 +281,25 @@ void CoreProcess::stopForegroundProcess()
 {
   if (m_processState != ProcessState::Stopping) {
     qCritical("not stopping core desktop process, unexpected process state");
+    return;
+  }
+
+  if (m_adoptedCore) {
+    // A matching existing core is not our QProcess child. Stop it through IPC
+    // and wait for its actual shutdown, rather than terminating an exited
+    // duplicate QProcess and leaving the GUI permanently in Stopping.
+    if (m_coreIpcClient && m_coreIpcClient->isConnected())
+      m_coreIpcClient->sendStop();
+    else {
+      resetCoreIpcObserver();
+      connectCoreIpc();
+    }
+    QTimer::singleShot(kRetryDelay, this, [this] {
+      if (m_adoptedCore && m_processState == ProcessState::Stopping) {
+        qWarning("could not confirm shutdown of the existing core; keeping its running state");
+        setProcessState(ProcessState::Started);
+      }
+    });
     return;
   }
 
@@ -394,6 +421,8 @@ void CoreProcess::start(std::optional<ProcessMode> processModeOption)
 
   qInfo().noquote() << QString("starting %1 process (%2 mode)").arg(coreMode, processModeToString(processMode));
 
+  resetCoreIpcObserver();
+  m_adoptedCore = false;
   setProcessState(ProcessState::Starting);
 
 #ifdef Q_OS_MACOS
@@ -443,52 +472,6 @@ void CoreProcess::start(std::optional<ProcessMode> processModeOption)
     qInfo().noquote() << "log file:" << logFile;
   }
 
-  // Wired before the start calls so it catches Started from both sync (desktop) and async (service) paths.
-  connect(
-      this, &CoreProcess::processStateChanged, this,
-      [this](ProcessState state) {
-        if (state != ProcessState::Started) {
-          return;
-        }
-
-        // Delay briefly to give the core process time to start its IPC server.
-        QTimer::singleShot(kRetryDelay, this, [this] {
-          if (m_processState != ProcessState::Started) {
-            return;
-          }
-
-          if (m_coreIpcClient) {
-            m_coreIpcClient->disconnectFromServer();
-            m_coreIpcClient->deleteLater();
-            m_coreIpcClient = nullptr;
-          }
-
-          m_coreIpcClient = new ipc::CoreIpcClient(this);
-
-          // queued so a modal dialog opened by a handler can't block readyRead and strand later messages
-          connect(
-              m_coreIpcClient, &ipc::CoreIpcClient::commandReceived, this, &CoreProcess::onCoreIpcMessageReceived,
-              Qt::QueuedConnection
-          );
-          connect(m_coreIpcClient, &ipc::CoreIpcClient::connected, this, [] {
-            qDebug("connected to core ipc server");
-          });
-          connect(m_coreIpcClient, &ipc::CoreIpcClient::connectionFailed, this, [] {
-            qWarning("failed to establish core ipc connection");
-          });
-          connect(m_coreIpcClient, &ipc::CoreIpcClient::serverShutdown, this, [this, client = m_coreIpcClient] {
-            qDebug("core ipc server shut down cleanly");
-            client->deleteLater();
-            if (m_coreIpcClient == client)
-              m_coreIpcClient = nullptr;
-          });
-
-          m_coreIpcClient->connectToServer();
-        });
-      },
-      static_cast<Qt::ConnectionType>(Qt::SingleShotConnection | Qt::QueuedConnection)
-  );
-
   if (processMode == ProcessMode::Desktop) {
     startForegroundProcess(args);
   } else if (processMode == ProcessMode::Service) {
@@ -504,6 +487,9 @@ void CoreProcess::stop(std::optional<ProcessMode> processModeOption)
 
   const auto currentMode = Settings::value(Settings::Core::ProcessMode).value<ProcessMode>();
   const auto processMode = processModeOption.value_or(currentMode);
+
+  m_coreIpcRetryTimer.stop();
+  ++m_coreIpcGeneration; // Reject already queued messages from the previous observation cycle.
 
   qInfo("stopping core process (%s mode)", qPrintable(processModeToString(processMode)));
 
@@ -621,7 +607,83 @@ void CoreProcess::setProcessState(ProcessState state)
       qPrintable(processStateToString(m_processState)), qPrintable(processStateToString(state))
   );
   m_processState = state;
+  if (state == ProcessState::Stopped || state == ProcessState::RetryPending)
+    resetCoreIpcObserver();
+  else if (state == ProcessState::Stopping)
+    m_coreIpcRetryTimer.stop();
   Q_EMIT processStateChanged(state);
+  if (state == ProcessState::Started)
+    scheduleCoreIpcReconnect(0);
+}
+
+void CoreProcess::resetCoreIpcObserver()
+{
+  m_coreIpcRetryTimer.stop();
+  ++m_coreIpcGeneration;
+  if (m_coreIpcClient) {
+    auto *client = m_coreIpcClient;
+    m_coreIpcClient = nullptr;
+    disconnect(client, nullptr, this, nullptr);
+    client->disconnectFromServer();
+    client->deleteLater();
+  }
+}
+
+void CoreProcess::scheduleCoreIpcReconnect(int delay)
+{
+  if (m_processState == ProcessState::Started && !m_coreIpcRetryTimer.isActive())
+    m_coreIpcRetryTimer.start(delay);
+}
+
+void CoreProcess::connectCoreIpc()
+{
+  if ((m_processState != ProcessState::Started && !(m_adoptedCore && m_processState == ProcessState::Stopping)) ||
+      (m_coreIpcClient && (m_coreIpcClient->isConnected() || m_coreIpcClient->isConnecting())))
+    return;
+  resetCoreIpcObserver();
+  const auto generation = m_coreIpcGeneration;
+  auto *client = new ipc::CoreIpcClient(this, m_coreIpcServerName);
+  m_coreIpcClient = client;
+  // A status observer attaches independently of the resource provider. Its
+  // handshake replays the current keyboard connection snapshot, and queued
+  // messages from a stopped or replaced process must not revive its old state.
+  connect(
+      client, &ipc::CoreIpcClient::commandReceived, this,
+      [this, client, generation](const QString &command, const QString &args) {
+        if (m_coreIpcClient == client && m_coreIpcGeneration == generation && m_processState == ProcessState::Started)
+          onCoreIpcMessageReceived(command, args);
+      },
+      Qt::QueuedConnection
+  );
+  connect(client, &ipc::CoreIpcClient::connected, this, [this, client, generation] {
+    qDebug("connected to core status observer; waiting for keyboard connection snapshot");
+    if (m_coreIpcClient == client && m_coreIpcGeneration == generation && m_adoptedCore &&
+        m_processState == ProcessState::Stopping)
+      client->sendStop();
+  });
+  connect(client, &ipc::CoreIpcClient::connectionFailed, this, [this, client, generation] {
+    if (m_coreIpcClient == client && m_coreIpcGeneration == generation) {
+      qWarning("core status observer disconnected, retrying without changing keyboard connection state");
+      scheduleCoreIpcReconnect();
+    }
+  });
+  connect(client, &ipc::CoreIpcClient::versionMismatch, this, [this, client, generation] {
+    if (m_coreIpcClient == client && m_coreIpcGeneration == generation)
+      client->sendStop();
+  });
+  connect(client, &ipc::CoreIpcClient::serverShutdown, this, [this, client] {
+    if (m_coreIpcClient != client)
+      return;
+    resetCoreIpcObserver();
+    setConnectionState(ConnectionState::Disconnected);
+    if (m_adoptedCore && m_processState == ProcessState::Stopping) {
+      m_adoptedCore = false;
+      setProcessState(ProcessState::Stopped);
+    } else {
+      scheduleCoreIpcReconnect();
+    }
+  });
+  client->connectToServer();
 }
 
 void CoreProcess::onCoreIpcMessageReceived(const QString &command, const QString &args)

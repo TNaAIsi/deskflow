@@ -7,6 +7,11 @@ SPDX-PackageSupplier = "Deskflow Devs"
 SPDX-PackageDownloadLocation = "https://github.com/deskflow/deskflow"
 
 [[annotations]]
+path = ["third_party/native-hid/karabiner-client-sdk-8.7.0.tar.gz", "third_party/native-hid/Karabiner-DriverKit-VirtualHIDDevice-8.7.0.pkg"]
+SPDX-FileCopyrightText = "Fumihiko Takayama and bundled dependency contributors; see archive headers and third_party/native-hid/README.md"
+SPDX-License-Identifier = "Unlicense AND BSL-1.0 AND MIT AND Zlib"
+
+[[annotations]]
 path = [
    ".github/**"
  , ".clang-format"

@@ -21,6 +21,7 @@
 #include "deskflow/StreamChunker.h"
 #include "deskflow/ipc/CoreIpc.h"
 #include "net/TCPSocket.h"
+#include "platform/PhysicalKeyboardCapture.h"
 #include "server/ClientListener.h"
 #include "server/ClientProxy.h"
 #include "server/ClientProxyUnknown.h"
@@ -165,6 +166,7 @@ Server::Server(ServerConfig &config, PrimaryClient *primaryClient, deskflow::Com
 
 Server::~Server()
 {
+  deskflow::setPhysicalKeyboardCapture(false);
   QObject::disconnect(m_topologyConnection);
   // remove event handlers and timers
   using enum EventTypes;
@@ -282,6 +284,7 @@ void Server::adoptClient(BaseClientProxy *client)
     return;
   }
   LOG_DEBUG("client \"%s\" has connected", getName(client).c_str());
+  client->setPhysicalKeyboardAllowed(!m_keyboardBroadcasting);
   ipcSendConnectionState(deskflow::core::ConnectionState::Connected);
   sendConnectedClientsIpc();
 
@@ -479,8 +482,10 @@ void Server::switchComputer(BaseClientProxy *dst, int32_t x, int32_t y, bool for
   // since that's a waste of time we skip that and just warp the
   // mouse.
   if (m_active != dst) {
+    deskflow::setPhysicalKeyboardCapture(dst->usesPhysicalKeyboard());
     // leave active computer
     if (!m_active->leave()) {
+      refreshPhysicalKeyboardCapture();
       // cannot leave computer
       LOG_WARN("can't leave computer");
       return;
@@ -517,6 +522,7 @@ void Server::switchComputer(BaseClientProxy *dst, int32_t x, int32_t y, bool for
 
     // enter new computer
     m_active->enter(x, y, m_seqNum, m_primaryClient->getToggleMask(), forScreensaver);
+    refreshPhysicalKeyboardCapture();
 
     if (m_enableClipboard) {
       // send the clipboard data to new active computer
@@ -534,6 +540,11 @@ void Server::switchComputer(BaseClientProxy *dst, int32_t x, int32_t y, bool for
   } else {
     m_active->mouseMove(x, y);
   }
+}
+
+void Server::refreshPhysicalKeyboardCapture()
+{
+  deskflow::setPhysicalKeyboardCapture(m_active != nullptr && m_active->usesPhysicalKeyboard());
 }
 
 void Server::jumpToComputer(BaseClientProxy *newComputer)
@@ -1492,6 +1503,12 @@ void Server::handleKeyboardBroadcastEvent(const Event &event)
   if (newState != m_keyboardBroadcasting || info->m_computers != m_keyboardBroadcastingComputers) {
     m_keyboardBroadcasting = newState;
     m_keyboardBroadcastingComputers = info->m_computers;
+    // Broadcasting can target older clients whose only representation is a
+    // character event. Keep that existing feature in compatibility mode rather
+    // than sending physical identities through a legacy protocol.
+    for (const auto &[name, client] : m_clients)
+      client->setPhysicalKeyboardAllowed(!m_keyboardBroadcasting);
+    refreshPhysicalKeyboardCapture();
     LOG(
         (CLOG_DEBUG "keyboard broadcasting %s: %s", m_keyboardBroadcasting ? "on" : "off",
          m_keyboardBroadcastingComputers.c_str())
@@ -2236,6 +2253,7 @@ void Server::forceLeaveClient(const BaseClientProxy *client)
 
     // cut over
     m_active = m_primaryClient;
+    refreshPhysicalKeyboardCapture();
 
     // enter new computer (unless we already have because of the
     // screen saver)

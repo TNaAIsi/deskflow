@@ -25,12 +25,20 @@
 #endif
 
 #include <QApplication>
+#include <QDir>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QProcessEnvironment>
 #include <QSharedMemory>
 #include <QTextStream>
 #include <QThread>
 #include <QTimer>
+
+#ifdef Q_OS_MACOS
+#include <array>
+#include <libproc.h>
+#include <unistd.h>
+#endif
 
 void qtMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &message)
 {
@@ -79,7 +87,30 @@ int main(int argc, char **argv)
 #endif
 
   QApplication::setApplicationName(QStringLiteral("%1 Core").arg(kAppName));
+#ifdef Q_OS_MACOS
+  // The native-input helper authorizes this hardened executable, so Qt must
+  // never load a plugin selected by a caller's environment or Qt CLI flags.
+  // Keep Deskflow's own CLI independent of QApplication's startup parser.
+  QStringList coreArguments;
+  for (int index = 0; index < argc; ++index)
+    coreArguments.append(QString::fromLocal8Bit(argv[index]));
+  const auto environment = QProcessEnvironment::systemEnvironment();
+  for (const auto &name : environment.keys())
+    if (name.startsWith("QT_") || name.startsWith("QML_") || name.startsWith("QML2_") || name.startsWith("QTWEBENGINE"))
+      qunsetenv(name.toLocal8Bit().constData());
+  qputenv("QT_QPA_PLATFORM", "cocoa");
+  std::array<char, PROC_PIDPATHINFO_MAXSIZE> executable{};
+  if (proc_pidpath(getpid(), executable.data(), uint32_t(executable.size())) <= 0)
+    return s_exitFailed;
+  const auto pluginPath = QFileInfo(QString::fromUtf8(executable.data())).absoluteDir().absoluteFilePath("../PlugIns");
+  if (QFileInfo::exists(pluginPath))
+    QCoreApplication::setLibraryPaths({QDir::cleanPath(pluginPath)});
+  int qtArgumentCount = 1;
+  char *qtArguments[] = {argv[0], nullptr};
+  QApplication app(qtArgumentCount, qtArguments);
+#else
   QApplication app(argc, argv);
+#endif
 
   Arch arch;
   arch.init();
@@ -87,7 +118,11 @@ int main(int argc, char **argv)
   Log log;
   qInstallMessageHandler(qtMessageHandler);
 
+#ifdef Q_OS_MACOS
+  CoreArgParser parser(coreArguments);
+#else
   CoreArgParser parser(QCoreApplication::arguments());
+#endif
 
   // Print any parser errors
   if (!parser.errorText().isEmpty()) {

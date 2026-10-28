@@ -57,90 +57,87 @@ StatusBar::StatusBar(QWidget *parent)
   adjustSize();
 }
 
-// clang-format off
 void StatusBar::setStatus(ConnectionState connectionState, ProcessState processState, bool isServer)
 {
-  if (m_retryTimer->isActive())
-    m_retryTimer->stop();
-  setSecurityIconVisible(false);
-  switch (processState) {
-    using enum ProcessState;
-    case Starting:
-      m_connectionInterval = -1;
-      m_lblStatus->setText(tr("%1 is starting...").arg(kAppName));
-      break;
-
-    case RetryPending:
-      m_connectionInterval = -1;
-      m_lblStatus->setText(tr("%1 will retry in a moment...").arg(kAppName));
-      break;
-
-    case Stopping:
-        m_connectionInterval = -1;
-      m_lblStatus->setText(tr("%1 is stopping...").arg(kAppName));
-      break;
-
-    case Stopped:
-      m_connectionInterval = -1;
-      m_lblStatus->setText(tr("%1 is not running").arg(kAppName));
-      break;
-
-    case Started: {
-      switch (connectionState) {
-        using enum ConnectionState;
-
-        case Listening: {
-          if (isServer) {
-            setSecurityIconVisible(true);
-            m_lblStatus->setText(tr("%1 is waiting for clients").arg(kAppName));
-          }
-          break;
-        }
-
-        case Connecting:
-          updateTimerLabel();
-          if (Settings::value(Settings::Client::DynamicConnectionRetry).toBool())
-            m_retryTimer->start();
-          break;
-
-        case Connected: {
-          setSecurityIconVisible(true);
-          m_connectionInterval = -1;
-          if (!isServer) {
-            m_lblStatus->setText(tr("%1 is connected as client of %2")
-                                     .arg(kAppName, Settings::value(Settings::Client::RemoteHost).toString()));
-          }
-          break;
-        }
-
-        case Disconnected:
-          m_lblStatus->setText(tr("%1 is disconnected").arg(kAppName));
-          m_connectionInterval = -1;
-          break;
-      }
-    }
-  }
+  if (m_isServer != isServer || processState != ProcessState::Started || m_processState != ProcessState::Started ||
+      connectionState == ConnectionState::Disconnected || connectionState == ConnectionState::Listening)
+    m_serverClients.clear();
+  if (connectionState != ConnectionState::Connecting || m_connectionState != ConnectionState::Connecting)
+    m_connectionInterval = -1;
+  m_connectionState = connectionState;
+  m_processState = processState;
+  m_isServer = isServer;
+  renderStatus();
 }
-// clang-format on
-void StatusBar::setServerClients(const QStringList &clients)
+
+void StatusBar::renderStatus()
 {
-  if (clients.isEmpty()) {
-    m_lblStatus->setText(tr("%1 is waiting for clients").arg(kAppName));
-    m_lblStatus->setToolTip("");
+  m_retryTimer->stop();
+  m_lblStatus->setToolTip({});
+  setSecurityIconVisible(false);
+  switch (m_processState) {
+  case ProcessState::Starting:
+    m_lblStatus->setText(tr("%1 is starting...").arg(kAppName));
+    return;
+  case ProcessState::RetryPending:
+    m_lblStatus->setText(tr("%1 will retry in a moment...").arg(kAppName));
+    return;
+  case ProcessState::Stopping:
+    m_lblStatus->setText(tr("%1 is stopping...").arg(kAppName));
+    return;
+  case ProcessState::Stopped:
+    m_lblStatus->setText(tr("%1 is not running").arg(kAppName));
+    return;
+  case ProcessState::Started:
+    break;
+  }
+
+  if (m_isServer && !m_serverClients.isEmpty()) {
+    setSecurityIconVisible(true);
+    m_connectionInterval = -1;
+    //: %1 is the application name; %2 lists currently connected clients.
+    m_lblStatus->setText(tr("%1 is connected, with %n client(s): %2", "", static_cast<int>(m_serverClients.size()))
+                             .arg(kAppName, m_serverClients.join(QStringLiteral(", "))));
+    if (m_serverClients.size() > 1)
+      m_lblStatus->setToolTip(tr("Clients:\n %1").arg(m_serverClients.join(QLatin1Char('\n'))));
     return;
   }
-  const auto clientCount = static_cast<int>(clients.size());
-  static const auto comma = QStringLiteral(", ");
-  static const auto newLine = QStringLiteral("\n");
-  //: Shown when in server mode and at least 1 client is connected
-  //: %1 is replaced by the app name
-  //: %2 will be a list of at least one client
-  //: %n will be replaced by the number of clients (n is >=1), it is not requried to be in the translation
-  const auto text = tr("%1 is connected, with %n client(s): %2", "", clientCount).arg(kAppName, clients.join(comma));
-  m_lblStatus->setText(text);
+  switch (m_connectionState) {
+  case ConnectionState::Listening:
+    if (m_isServer) {
+      setSecurityIconVisible(true);
+      m_lblStatus->setText(tr("%1 is waiting for clients").arg(kAppName));
+    } else {
+      m_lblStatus->setText(tr("%1 is disconnected").arg(kAppName));
+    }
+    break;
+  case ConnectionState::Connecting:
+    updateTimerLabel();
+    if (Settings::value(Settings::Client::DynamicConnectionRetry).toBool())
+      m_retryTimer->start();
+    break;
+  case ConnectionState::Connected:
+    setSecurityIconVisible(true);
+    if (m_isServer)
+      m_lblStatus->setText(tr("%1 is connected").arg(kAppName));
+    else
+      m_lblStatus->setText(
+          tr("%1 is connected as client of %2").arg(kAppName, Settings::value(Settings::Client::RemoteHost).toString())
+      );
+    break;
+  case ConnectionState::Disconnected:
+    m_lblStatus->setText(tr("%1 is disconnected").arg(kAppName));
+    break;
+  }
+}
 
-  const auto toolTipString = clientCount == 1 ? "" : tr("Clients:\n %1").arg(clients.join(newLine));
-  m_lblStatus->setToolTip(toolTipString);
+void StatusBar::setServerClients(const QStringList &clients)
+{
+  m_serverClients = clients;
+  // Client-list updates and timer callbacks can already be queued when a core
+  // stops. Retain the data, but render it only for a running server.
+  if (m_isServer && m_processState == ProcessState::Started)
+    renderStatus();
 }
 
 void StatusBar::setSecurityIconVisible(bool visible)
@@ -181,10 +178,14 @@ void StatusBar::updateText()
   m_btnFingerprint->setToolTip(tr("View local fingerprint"));
   m_btnUpdate->setText(tr("Update available"));
   setSecurityLevel(m_securityLevel);
+  renderStatus();
 }
 
 void StatusBar::updateTimerLabel()
 {
+  if (m_processState != ProcessState::Started || m_connectionState != ConnectionState::Connecting ||
+      (m_isServer && !m_serverClients.isEmpty()))
+    return;
   QString text;
   if (m_connectionInterval < 2 || !Settings::value(Settings::Client::DynamicConnectionRetry).toBool()) {
     text = tr("%1 is connecting...").arg(kAppName);

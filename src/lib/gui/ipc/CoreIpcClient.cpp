@@ -13,7 +13,10 @@
 
 namespace deskflow::gui::ipc {
 
-CoreIpcClient::CoreIpcClient(QObject *parent) : IpcClient(parent, kCoreIpcName, QStringLiteral("core"))
+CoreIpcClient::CoreIpcClient(QObject *parent, const QString &serverName, IpcClient::Purpose purpose)
+    : IpcClient(
+          parent, serverName.isEmpty() ? QString::fromLatin1(kCoreIpcName) : serverName, QStringLiteral("core"), purpose
+      )
 {
   // do nothing
 }

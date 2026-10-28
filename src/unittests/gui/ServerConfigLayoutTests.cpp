@@ -3,12 +3,18 @@
  * SPDX-License-Identifier: GPL-2.0-only WITH LicenseRef-OpenSSL-Exception
  */
 
+#include "common/FullscreenGamePrograms.h"
 #include "common/Settings.h"
 #include "gui/dialogs/ServerConfigDialog.h"
 #include "gui/widgets/SettingsDialogButtonBox.h"
+#include "workspace/DisplayLayoutDialog.h"
 
+#include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QDoubleSpinBox>
+#include <QGraphicsRectItem>
+#include <QGraphicsScene>
 #include <QGroupBox>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -18,6 +24,8 @@
 #include <QPushButton>
 #include <QScopeGuard>
 #include <QSignalSpy>
+#include <QStandardPaths>
+#include <QTabWidget>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTranslator>
@@ -32,10 +40,54 @@ private:
 
   static QJsonObject state(bool independent)
   {
+    const auto display = [](const QString &device, const QString &id, int x, int width) {
+      return QJsonObject{
+          {"device", device},
+          {"id", id},
+          {"label", id},
+          {"connected", true},
+          {"native", QJsonObject{{"x", 0}, {"y", 0}, {"width", width}, {"height", 1080}}},
+          {"canvas", QJsonObject{{"x", x}, {"y", 0}, {"width", width}, {"height", 1080}}}
+      };
+    };
     return {
         {"layoutMode", independent ? "monitors" : "computers"},
-        {"topology", QJsonObject{{"version", 1}, {"enabled", independent}, {"displays", QJsonArray{}}}}
+        {"topology",
+         QJsonObject{
+             {"version", 1},
+             {"enabled", independent},
+             {"displays", QJsonArray{display("Windows", "Gaming", 0, 1920), display("Mac", "Built-in", 1920, 1728)}}
+         }}
     };
+  }
+
+  static deskflow::workspace::DisplayLayoutWidget *editor(ServerConfigDialog &dialog)
+  {
+    return dialog.findChild<deskflow::workspace::DisplayLayoutWidget *>();
+  }
+
+  static void moveFirstDisplay(ServerConfigDialog &dialog, double x)
+  {
+    auto *scene = editor(dialog)->findChild<QGraphicsScene *>();
+    QVERIFY(scene);
+    QGraphicsItem *first = nullptr;
+    for (auto *item : scene->items())
+      if (dynamic_cast<QGraphicsRectItem *>(item) && (!first || item->pos().x() < first->pos().x()))
+        first = item;
+    QVERIFY(first);
+    scene->clearSelection();
+    first->setSelected(true);
+    auto *position = editor(dialog)->findChild<QDoubleSpinBox *>("displayCanvasX");
+    QVERIFY(position);
+    position->setValue(x);
+  }
+
+  static double canvasX(const QJsonObject &topology, const QString &device)
+  {
+    for (const auto &value : topology.value("displays").toArray())
+      if (value.toObject().value("device").toString() == device)
+        return value.toObject().value("canvas").toObject().value("x").toDouble();
+    return 0;
   }
 
   static QDialogButtonBox *buttons(ServerConfigDialog &dialog)
@@ -58,6 +110,7 @@ private Q_SLOTS:
   void initTestCase()
   {
     QVERIFY(m_profile.isValid());
+    QStandardPaths::setTestModeEnabled(true);
   }
 
   void init()
@@ -82,10 +135,12 @@ private Q_SLOTS:
     }
     Settings::setSettingsFile(filename);
     Settings::setStateFile(m_profile.filePath("state"));
-    Settings::setValue(Settings::Workspace::Layout, QString::fromUtf8(QJsonDocument(state(true)).toJson()));
+    Settings::setValue(
+        Settings::Workspace::Layout, QString::fromUtf8(QJsonDocument(state(true).value("topology").toObject()).toJson())
+    );
   }
 
-  void independentLayoutHasOnePositionEditor()
+  void independentLayoutIsEmbeddedWithOneSaveBoundary()
   {
     ServerConfig config;
     ServerConfigDialog dialog(nullptr, config);
@@ -96,20 +151,95 @@ private Q_SLOTS:
     QCOMPARE(list->item(0)->data(Qt::UserRole).toInt(), 7);
     QCOMPARE(list->item(1)->data(Qt::UserRole).toInt(), 8);
     QCOMPARE(list->item(1)->toolTip(), QString("Aliases: Mac-alias"));
+    QVERIFY(editor(dialog));
+    QVERIFY(!dialog.findChild<QPushButton *>("displayLayoutButton"));
+    QVERIFY(!dialog.findChild<deskflow::workspace::DisplayLayoutDialog *>());
+    QCOMPARE(dialog.findChildren<QDialogButtonBox *>().size(), 1);
     QVERIFY(dialog.findChild<QWidget *>("computerSetupView")->isHidden());
     QVERIFY(dialog.findChild<QWidget *>("lblRemoveComputer")->isHidden());
     QVERIFY(dialog.findChild<QWidget *>("lblNewComputer")->isHidden());
     QVERIFY(!dialog.findChild<QWidget *>("registeredComputersPanel")->isHidden());
+    const auto original = Settings::value(Settings::Workspace::Layout);
+    QSignalSpy saved(&dialog, &ServerConfigDialog::displayLayoutSaved);
+    moveFirstDisplay(dialog, -120);
+    QVERIFY(editor(dialog)->isModified());
+    QCOMPARE(Settings::value(Settings::Workspace::Layout), original);
+    QCOMPARE(saved.count(), 0);
+    buttons(dialog)->button(QDialogButtonBox::Save)->click();
+    QCOMPARE(saved.count(), 1);
+    QCOMPARE(dialog.result(), QDialog::Accepted);
+    QVERIFY(!dialog.requiresCoreRestart());
+    const auto layout =
+        QJsonDocument::fromJson(Settings::value(Settings::Workspace::Layout).toString().toUtf8()).object();
+    QCOMPARE(canvasX(layout, "Windows"), -120.0);
+  }
 
-    auto *layout = dialog.findChild<QPushButton *>("displayLayoutButton");
-    QVERIFY(layout->isEnabled());
-    QSignalSpy spy(&dialog, &ServerConfigDialog::displayLayoutRequested);
-    layout->click();
-    QCOMPARE(spy.count(), 1);
-    dialog.setLayoutState(state(false));
+  void cancelDiscardsEditedGeometryAndMode()
+  {
+    ServerConfig config;
+    ServerConfigDialog dialog(nullptr, config);
+    dialog.setLayoutState(state(true));
+    const auto original = Settings::value(Settings::Workspace::Layout);
+    QSignalSpy saved(&dialog, &ServerConfigDialog::displayLayoutSaved);
+    moveFirstDisplay(dialog, -300);
+    auto *mode = editor(dialog)->findChild<QCheckBox *>("independentMonitorMode");
+    mode->setChecked(false);
     QVERIFY(!dialog.findChild<QWidget *>("computerSetupView")->isHidden());
     QVERIFY(dialog.findChild<QWidget *>("registeredComputersPanel")->isHidden());
-    QVERIFY(dialog.findChild<QLabel *>("layoutModeLabel")->text().contains("Compatibility"));
+    buttons(dialog)->button(QDialogButtonBox::Cancel)->click();
+    QCOMPARE(saved.count(), 0);
+    QCOMPARE(Settings::value(Settings::Workspace::Layout), original);
+  }
+
+  void resetRestoresDraftAndMetadataRefreshKeepsEditedPositions()
+  {
+    ServerConfig config;
+    ServerConfigDialog dialog(nullptr, config);
+    dialog.setLayoutState(state(true));
+    moveFirstDisplay(dialog, -120);
+    auto updated = state(true);
+    auto topology = updated.value("topology").toObject();
+    auto displays = topology.value("displays").toArray();
+    auto windows = displays.at(0).toObject();
+    auto native = windows.value("native").toObject();
+    native["width"] = 2560;
+    windows["native"] = native;
+    displays[0] = windows;
+    auto mac = displays.at(1).toObject();
+    mac["connected"] = false;
+    displays[1] = mac;
+    topology["displays"] = displays;
+    updated["topology"] = topology;
+    dialog.setLayoutState(updated);
+    QCOMPARE(canvasX(editor(dialog)->layoutState(), "Windows"), -120.0);
+    bool sawUpdatedNative = false;
+    for (const auto &value : editor(dialog)->layoutState().value("displays").toArray()) {
+      const auto display = value.toObject();
+      if (display.value("device").toString() == "Windows") {
+        QCOMPARE(display.value("native").toObject().value("width").toInt(), 2560);
+        sawUpdatedNative = true;
+      }
+    }
+    QVERIFY(sawUpdatedNative);
+    buttons(dialog)->button(QDialogButtonBox::Reset)->click();
+    QCOMPARE(canvasX(editor(dialog)->layoutState(), "Windows"), 0.0);
+    QVERIFY(!editor(dialog)->isModified());
+  }
+
+  void overlappingLayoutStaysOpenAndDoesNotCommit()
+  {
+    ServerConfig config;
+    ServerConfigDialog dialog(nullptr, config);
+    dialog.setLayoutState(state(true));
+    dialog.show();
+    const auto original = Settings::value(Settings::Workspace::Layout);
+    QSignalSpy saved(&dialog, &ServerConfigDialog::displayLayoutSaved);
+    moveFirstDisplay(dialog, 1000);
+    buttons(dialog)->button(QDialogButtonBox::Save)->click();
+    QVERIFY(dialog.isVisible());
+    QCOMPARE(saved.count(), 0);
+    QCOMPARE(Settings::value(Settings::Workspace::Layout), original);
+    QVERIFY(!dialog.findChild<QLabel *>("layoutSaveError")->text().isEmpty());
   }
 
   void registeredChangesAreStagedAndCancelPreservesLayout()
@@ -120,7 +250,7 @@ private Q_SLOTS:
     dialog.setLayoutState(state(true));
     QVERIFY(dialog.addClient("Linux"));
     QCOMPARE(dialog.findChild<QListWidget *>("registeredComputers")->count(), 3);
-    QVERIFY(!dialog.findChild<QPushButton *>("displayLayoutButton")->isEnabled());
+
     QVERIFY(config == original);
     QVERIFY(!Settings::knownComputers().contains("Linux"));
 
@@ -146,7 +276,7 @@ private Q_SLOTS:
     remove->click();
     QCOMPARE(list->count(), 1);
     QCOMPARE(list->item(0)->data(Qt::UserRole).toInt(), 7);
-    QVERIFY(!dialog.findChild<QPushButton *>("displayLayoutButton")->isEnabled());
+
     const auto savedLayout = Settings::value(Settings::Workspace::Layout);
     buttons(dialog)->button(QDialogButtonBox::Save)->click();
     QVERIFY(config.computerExists("Windows"));
@@ -165,10 +295,11 @@ private Q_SLOTS:
     auto *external = dialog.findChild<QGroupBox *>("groupExternalConfig");
     external->setChecked(true);
     QVERIFY(!Settings::value(Settings::Server::ExternalConfig).toBool());
-    QVERIFY(!dialog.findChild<QPushButton *>("displayLayoutButton")->isEnabled());
+
     QVERIFY(dialog.findChild<QWidget *>("computerSetupView")->isHidden());
     QVERIFY(dialog.findChild<QWidget *>("registeredComputersPanel")->isHidden());
-    QVERIFY(dialog.findChild<QLabel *>("layoutModeLabel")->text().contains("External configuration"));
+    QVERIFY(dialog.findChild<QLabel *>("layoutModeLabel")->text().contains("external configuration"));
+    QVERIFY(editor(dialog)->isHidden());
     auto *configFile = dialog.findChild<QLineEdit *>("lineConfigFile");
     const auto originalFile = Settings::value(Settings::Server::ExternalConfigFile);
     configFile->setText(Settings::settingsFile());
@@ -176,6 +307,71 @@ private Q_SLOTS:
     buttons(dialog)->button(QDialogButtonBox::Cancel)->click();
     QVERIFY(!Settings::value(Settings::Server::ExternalConfig).toBool());
     QCOMPARE(Settings::value(Settings::Server::ExternalConfigFile), originalFile);
+  }
+
+  void fullscreenGameOverridesSaveAndCancelWithServerSettings()
+  {
+    const QStringList originalGames{"C:/Games/First/game.exe", "C:/Games/Second/game.exe"};
+    Settings::setValue(Settings::Server::PreventFullscreenSwitch, true);
+    Settings::setValue(Settings::Server::FullscreenGamePrograms, originalGames);
+    {
+      ServerConfig config;
+      ServerConfigDialog dialog(nullptr, config);
+      auto *games = dialog.findChild<QListWidget *>("fullscreenGamePrograms");
+      auto *remove = dialog.findChild<QPushButton *>("removeFullscreenGameProgram");
+      QVERIFY(games);
+      QCOMPARE(games->count(), 2);
+      games->setCurrentRow(0);
+      QVERIFY(remove->isEnabled());
+      remove->click();
+      QCOMPARE(games->count(), 1);
+      QCOMPARE(Settings::value(Settings::Server::FullscreenGamePrograms).toStringList(), originalGames);
+      buttons(dialog)->button(QDialogButtonBox::Cancel)->click();
+      QCOMPARE(Settings::value(Settings::Server::FullscreenGamePrograms).toStringList(), originalGames);
+    }
+    {
+      ServerConfig config;
+      ServerConfigDialog dialog(nullptr, config);
+      auto *games = dialog.findChild<QListWidget *>("fullscreenGamePrograms");
+      games->setCurrentRow(0);
+      dialog.findChild<QPushButton *>("removeFullscreenGameProgram")->click();
+      buttons(dialog)->button(QDialogButtonBox::Save)->click();
+      QCOMPARE(dialog.result(), QDialog::Accepted);
+      QVERIFY(dialog.requiresCoreRestart());
+      QCOMPARE(
+          Settings::value(Settings::Server::FullscreenGamePrograms).toStringList(), QStringList{originalGames.last()}
+      );
+    }
+  }
+
+  void fullscreenGameOverridesResetAndBoundedList()
+  {
+    QStringList originalGames;
+    for (int i = 0; i < deskflow::kMaximumFullscreenGamePrograms; ++i)
+      originalGames.append(QStringLiteral("C:/Games/%1.exe").arg(i));
+    Settings::setValue(Settings::Server::PreventFullscreenSwitch, true);
+    Settings::setValue(Settings::Server::FullscreenGamePrograms, originalGames);
+    ServerConfig config;
+    ServerConfigDialog dialog(nullptr, config);
+    auto *games = dialog.findChild<QListWidget *>("fullscreenGamePrograms");
+    auto *add = dialog.findChild<QPushButton *>("addFullscreenGameProgram");
+    QCOMPARE(games->count(), deskflow::kMaximumFullscreenGamePrograms);
+    QVERIFY(!add->isEnabled());
+    games->setCurrentRow(0);
+    dialog.findChild<QPushButton *>("removeFullscreenGameProgram")->click();
+    QVERIFY(add->isEnabled());
+    buttons(dialog)->button(QDialogButtonBox::Reset)->click();
+    QCOMPARE(games->count(), deskflow::kMaximumFullscreenGamePrograms);
+    QVERIFY(!add->isEnabled());
+    QCOMPARE(Settings::value(Settings::Server::FullscreenGamePrograms).toStringList(), originalGames);
+    dialog.findChild<QTabWidget *>("tabWidget")->setCurrentIndex(2);
+    buttons(dialog)->button(QDialogButtonBox::RestoreDefaults)->click();
+    QCOMPARE(games->count(), 0);
+    QCOMPARE(Settings::value(Settings::Server::FullscreenGamePrograms).toStringList(), originalGames);
+    buttons(dialog)->button(QDialogButtonBox::Save)->click();
+    QCOMPARE(dialog.result(), QDialog::Accepted);
+    QVERIFY(dialog.requiresCoreRestart());
+    QVERIFY(Settings::value(Settings::Server::FullscreenGamePrograms).toStringList().isEmpty());
   }
 
   void renderLayoutModes()
@@ -194,6 +390,18 @@ private Q_SLOTS:
       QTest::qWait(50);
       QVERIFY(dialog.grab().save(output + (independent ? "/server-monitors.png" : "/server-computers.png")));
     }
+    Settings::setValue(
+        Settings::Server::FullscreenGamePrograms, QStringList{QStringLiteral("C:/Games/Example Game/Game.exe")}
+    );
+    Settings::setValue(Settings::Server::PreventFullscreenSwitch, true);
+    ServerConfig config;
+    ServerConfigDialog games(nullptr, config);
+    games.findChild<QCheckBox *>("cbPreventFullscreenSwitch")->setVisible(true);
+    games.findChild<QWidget *>("fullscreenGameProgramsPanel")->setVisible(true);
+    games.findChild<QTabWidget *>("tabWidget")->setCurrentIndex(2);
+    games.show();
+    QTest::qWait(50);
+    QVERIFY(games.grab().save(output + "/server-game-protection.png"));
   }
 };
 

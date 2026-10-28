@@ -769,6 +769,11 @@ void ServerProxy::setOptions()
   // forward
   m_client->setOptions(options);
 
+  updateModifierTranslation(options);
+}
+
+void ServerProxy::updateModifierTranslation(const OptionsList &options)
+{
   // update modifier table
   for (uint32_t i = 0, n = (uint32_t)options.size(); i < n; i += 2) {
     KeyModifierID id = kKeyModifierIDNull;

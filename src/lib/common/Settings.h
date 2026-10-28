@@ -43,6 +43,7 @@ public:
     inline static const auto XScrollScale = QStringLiteral("client/xScrollScale");
     inline static const auto LanguageSync = QStringLiteral("client/languageSync");
     inline static const auto CapsLockInputSource = QStringLiteral("client/capsLockInputSource");
+    inline static const auto NativeKeyboard = QStringLiteral("client/nativeKeyboard");
     inline static const auto RemoteHost = QStringLiteral("client/remoteHost");
     inline static const auto XdpClipboardRetried = QStringLiteral("client/xdpClipboardRetried");
     inline static const auto XdpRestoreToken = QStringLiteral("client/xdpRestoreToken");
@@ -118,6 +119,7 @@ public:
     inline static const auto Protocol = QStringLiteral("server/protocol");
     inline static const auto RelativeMouseMoves = QStringLiteral("server/relativeMouseMoves");
     inline static const auto PreventFullscreenSwitch = QStringLiteral("server/preventFullscreenSwitch");
+    inline static const auto FullscreenGamePrograms = QStringLiteral("server/fullscreenGamePrograms");
     inline static const auto SwitchDelay = QStringLiteral("server/switchDelay");
     inline static const auto SwitchDoubleTap = QStringLiteral("server/switchDoubleTap");
     inline static const auto Win32KeepForeground = QStringLiteral("server/win32KeepForeground");
@@ -289,6 +291,7 @@ private:
     , Client::InvertXScroll
     , Client::LanguageSync
     , Client::CapsLockInputSource
+    , Client::NativeKeyboard
     , Client::RemoteHost
     , Client::YScrollScale
     , Client::XScrollScale
@@ -345,6 +348,7 @@ private:
     , Server::Protocol
     , Server::RelativeMouseMoves
     , Server::PreventFullscreenSwitch
+    , Server::FullscreenGamePrograms
     , Server::SwitchDelay
     , Server::SwitchDoubleTap
     , Server::Win32KeepForeground
@@ -366,6 +370,7 @@ private:
     , Client::InvertXScroll
     , Client::LanguageSync
     , Client::CapsLockInputSource
+    , Client::NativeKeyboard
     , Client::XdpClipboardRetried
     , Log::ToFile
     , Log::GuiDebug

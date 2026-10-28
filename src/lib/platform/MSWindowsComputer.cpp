@@ -17,6 +17,8 @@
 #include "client/Client.h"
 #include "common/Constants.h"
 #include "common/EdgeSwitchPolicy.h"
+#include "common/FullscreenGamePrograms.h"
+#include "common/PhysicalKey.h"
 #include "common/Settings.h"
 #include "deskflow/App.h"
 #include "deskflow/ClientApp.h"
@@ -26,12 +28,15 @@
 #include "platform/MSWindowsClipboard.h"
 #include "platform/MSWindowsDesks.h"
 #include "platform/MSWindowsEventQueueBuffer.h"
+#include "platform/MSWindowsHandle.h"
 #include "platform/MSWindowsKeyState.h"
 #include "platform/MSWindowsScreenSaver.h"
 
 #include <Shlobj.h>
 #include <algorithm>
+#include <array>
 #include <comutil.h>
+#include <shellapi.h>
 #include <string.h>
 
 // suppress warning about GetVersionEx, which is used indirectly in this
@@ -89,6 +94,10 @@ MSWindowsComputer::MSWindowsComputer(bool isPrimary, bool useHooks, IEventQueue 
       m_events(events)
 {
   LOG_DEBUG("settting up %s computer", m_isPrimary ? "primary" : "secondary");
+
+  m_fullscreenGamePrograms = deskflow::cleanFullscreenGameProgramList(
+      Settings::value(Settings::Server::FullscreenGamePrograms).toStringList()
+  );
 
   assert(s_windowInstance != nullptr);
   assert(s_computer == nullptr);
@@ -692,8 +701,19 @@ bool MSWindowsComputer::isAutomaticSwitchBlocked() const
   const HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
   const bool hasWindowBounds = GetWindowRect(window, &windowRect) && GetMonitorInfo(monitor, &monitorInfo);
   const bool borderless = (GetWindowLongPtr(window, GWL_STYLE) & WS_CAPTION) == 0;
-  const bool fullscreen = hasWindowBounds && borderless &&
-                          EdgeSwitchPolicy::coversMonitor(toRect(windowRect), toRect(monitorInfo.rcMonitor));
+  const bool coversMonitor =
+      hasWindowBounds && EdgeSwitchPolicy::coversMonitor(toRect(windowRect), toRect(monitorInfo.rcMonitor));
+  if (!coversMonitor)
+    return false;
+
+  // The shell distinguishes exclusive Direct3D from generic full-screen or
+  // presentation mode. It is an additional signal, not executable-level game
+  // identification. A failed query must not turn every full-screen app into a
+  // protected game. Some exclusive windows retain their caption style bits.
+  QUERY_USER_NOTIFICATION_STATE notificationState = QUNS_ACCEPTS_NOTIFICATIONS;
+  const bool exclusiveDirect3D =
+      SUCCEEDED(SHQueryUserNotificationState(&notificationState)) && notificationState == QUNS_RUNNING_D3D_FULL_SCREEN;
+  const bool fullscreen = borderless || exclusiveDirect3D;
 
   RECT clip{};
   const int x = GetSystemMetrics(SM_XVIRTUALSCREEN);
@@ -704,7 +724,34 @@ bool MSWindowsComputer::isAutomaticSwitchBlocked() const
   // GetClipCursor also succeeds when no application confines the cursor. Only
   // a smaller, valid region is meaningful; GetCapture is not a global query.
   const bool confined = GetClipCursor(&clip) && EdgeSwitchPolicy::isRestrictiveClip(toRect(clip), desktop);
-  return EdgeSwitchPolicy::blocksAutomaticSwitch(fullscreen, confined);
+  bool configuredGame = false;
+  if (fullscreen && !confined && !exclusiveDirect3D && !m_fullscreenGamePrograms.isEmpty()) {
+    DWORD processId = 0;
+    GetWindowThreadProcessId(window, &processId);
+    const auto now = GetTickCount64();
+    if (window != m_gameProgramWindow || processId != m_gameProgramProcess || now - m_gameProgramChecked >= 500) {
+      m_gameProgramWindow = window;
+      m_gameProgramProcess = processId;
+      m_gameProgramChecked = now;
+      m_gameProgramMatched = false;
+      if (processId) {
+        MSWindowsHandle process(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId));
+        if (process.get()) {
+          std::array<wchar_t, 32768> executable{};
+          DWORD length = static_cast<DWORD>(executable.size());
+          if (QueryFullProcessImageNameW(process.get(), 0, executable.data(), &length)) {
+            const auto path = deskflow::cleanFullscreenGameProgramPath(
+                QString::fromWCharArray(executable.data(), static_cast<int>(length))
+            );
+            m_gameProgramMatched = !path.isEmpty() && m_fullscreenGamePrograms.contains(path, Qt::CaseInsensitive);
+          }
+        }
+      }
+    }
+    configuredGame = m_gameProgramMatched;
+  }
+  return GetForegroundWindow() == window &&
+         EdgeSwitchPolicy::blocksAutomaticSwitch(fullscreen, confined, exclusiveDirect3D, configuredGame);
 }
 
 bool MSWindowsComputer::isAnyMouseButtonDown(uint32_t &buttonID) const
@@ -1058,6 +1105,10 @@ bool MSWindowsComputer::onKey(WPARAM wParam, LPARAM lParam)
 
   // get event info
   KeyButton button = (KeyButton)((lParam & 0x01ff0000) >> 16);
+  const bool physical = m_isPrimary && !m_isOnComputer && MSWindowsHook::physicalKeyboardMode();
+  const auto usage = deskflow::physicalkey::windowsSet1(button, static_cast<uint16_t>((wParam >> 16) & 0xffu));
+  if (physical && button == 0 && usage)
+    button = static_cast<KeyButton>(0x180u | ((wParam >> 16) & 0x7fu));
   bool down = ((lParam & 0x80000000u) == 0x00000000u);
   bool wasDown = isKeyDown(button);
   KeyModifierMask oldState = pollActiveModifiers();
@@ -1090,7 +1141,8 @@ bool MSWindowsComputer::onKey(WPARAM wParam, LPARAM lParam)
       fakeLocalKey(*find, false);
       m_primaryKeyDownList.erase(find);
       m_hook.setMode(kHOOK_RELAY_EVENTS);
-      return true;
+      if (!physical)
+        return true;
     }
   }
 
@@ -1137,6 +1189,25 @@ bool MSWindowsComputer::onKey(WPARAM wParam, LPARAM lParam)
 
   // ignore message if posted prior to last mark change
   if (!ignore()) {
+    if (physical) {
+      if (!usage) {
+        LOG_DEBUG("physical keyboard has no usage for scan=%04x vk=%02x", button, (wParam >> 16) & 0xffu);
+        return true;
+      }
+      KeyModifierMask mask = state;
+      KeyID key = m_keyState->mapKeyFromEvent(wParam, lParam, &mask);
+      if (key == kKeyNone)
+        key = deskflow::physicalkey::semanticFallback(usage);
+      const auto type = (lParam & 0x40000000u) != 0 && down ? EventTypes::KeyStateKeyRepeat
+                        : down                              ? EventTypes::KeyStateKeyDown
+                                                            : EventTypes::KeyStateKeyUp;
+      // Retain the semantic event for hotkey filtering, but keep the exact
+      // physical usage independent of layout and half-duplex Caps emulation.
+      m_events->addEvent(
+          Event(type, getEventTarget(), KeyInfo::alloc(key, mask, deskflow::physicalkey::encode(usage), 1))
+      );
+      return true;
+    }
     // check for ctrl+alt+del.  we do not want to pass that to the
     // client.  the user can use ctrl+alt+pause to emulate it.
     UINT virtKey = ((wParam >> 16) & 0xffu);

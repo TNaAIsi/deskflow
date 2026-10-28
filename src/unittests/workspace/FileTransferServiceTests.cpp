@@ -64,6 +64,8 @@ void link(
 class FileTransferServiceTests : public QObject
 {
   Q_OBJECT
+private:
+  QTemporaryDir m_storage;
 private Q_SLOTS:
   void emptyLegacyUpdatesPreserveFileClipboard();
   void transfersInBothDirectionsConcurrently();
@@ -99,8 +101,8 @@ void FileTransferServiceTests::transfersInBothDirectionsConcurrently()
   const QByteArray secondBytes(2 * 1024 * 1024 + 7, '\x35');
   QVERIFY(writeFile(firstSource.path() + "/first.bin", firstBytes));
   QVERIFY(writeFile(secondSource.path() + "/second.bin", secondBytes));
-  FileTransferService first;
-  FileTransferService second;
+  FileTransferService first(nullptr, m_storage.path());
+  FileTransferService second(nullptr, m_storage.path());
   first.setClipboardEnabled(false);
   second.setClipboardEnabled(false);
   link(first, second);
@@ -145,8 +147,8 @@ void FileTransferServiceTests::transfersDirectoriesEmptyAndBinaryFiles()
   const QByteArray bytes(1024 * 1024 + 37, '\xa5');
   QVERIFY(writeFile(source.path() + "/folder/nested/data.bin", bytes));
   QVERIFY(writeFile(source.path() + "/folder/empty.txt", {}));
-  FileTransferService sender;
-  FileTransferService receiver;
+  FileTransferService sender(nullptr, m_storage.path());
+  FileTransferService receiver(nullptr, m_storage.path());
   sender.setClipboardEnabled(false);
   receiver.setClipboardEnabled(false);
   link(sender, receiver);
@@ -172,8 +174,8 @@ void FileTransferServiceTests::preservesExistingNames()
   QTemporaryDir target;
   QVERIFY(writeFile(source.path() + "/report.txt", "new data"));
   QVERIFY(writeFile(target.path() + "/report.txt", "original data"));
-  FileTransferService sender;
-  FileTransferService receiver;
+  FileTransferService sender(nullptr, m_storage.path());
+  FileTransferService receiver(nullptr, m_storage.path());
   sender.setClipboardEnabled(false);
   receiver.setClipboardEnabled(false);
   link(sender, receiver);
@@ -194,8 +196,8 @@ void FileTransferServiceTests::retriesAfterTransportBackpressure()
   QTemporaryDir target;
   const QByteArray bytes(1024 * 1024, '\x72');
   QVERIFY(writeFile(source.path() + "/data.bin", bytes));
-  FileTransferService sender;
-  FileTransferService receiver;
+  FileTransferService sender(nullptr, m_storage.path());
+  FileTransferService receiver(nullptr, m_storage.path());
   sender.setClipboardEnabled(false);
   receiver.setClipboardEnabled(false);
   int rejectedChunks = 0;
@@ -222,8 +224,8 @@ void FileTransferServiceTests::rejectsCorruptedBytesWithoutPublishing()
   QTemporaryDir source;
   QTemporaryDir target;
   QVERIFY(writeFile(source.path() + "/data.bin", QByteArray(200000, '\x13')));
-  FileTransferService sender;
-  FileTransferService receiver;
+  FileTransferService sender(nullptr, m_storage.path());
+  FileTransferService receiver(nullptr, m_storage.path());
   sender.setClipboardEnabled(false);
   receiver.setClipboardEnabled(false);
   link(sender, receiver, [](const QString &type, QJsonObject &, QByteArray &payload) {
@@ -245,7 +247,7 @@ void FileTransferServiceTests::rejectsCorruptedBytesWithoutPublishing()
 
 void FileTransferServiceTests::rejectsTraversalManifest()
 {
-  FileTransferService receiver;
+  FileTransferService receiver(nullptr, m_storage.path());
   receiver.setClipboardEnabled(false);
   QSignalSpy offers(&receiver, &FileTransferService::offerAvailable);
   QSignalSpy errors(&receiver, &FileTransferService::error);
@@ -266,7 +268,7 @@ void FileTransferServiceTests::rejectsSymlinkSource()
   QTemporaryDir source;
   QVERIFY(writeFile(source.path() + "/real.txt", "data"));
   QVERIFY(QFile::link(source.path() + "/real.txt", source.path() + "/link.txt"));
-  FileTransferService sender;
+  FileTransferService sender(nullptr, m_storage.path());
   sender.setClipboardEnabled(false);
   QSignalSpy errors(&sender, &FileTransferService::error);
   QSignalSpy outgoing(&sender, &FileTransferService::outbound);
@@ -284,8 +286,8 @@ void FileTransferServiceTests::rejectsChangedSource()
   QTemporaryDir target;
   const auto path = source.path() + "/data.bin";
   QVERIFY(writeFile(path, "old"));
-  FileTransferService sender;
-  FileTransferService receiver;
+  FileTransferService sender(nullptr, m_storage.path());
+  FileTransferService receiver(nullptr, m_storage.path());
   sender.setClipboardEnabled(false);
   receiver.setClipboardEnabled(false);
   link(sender, receiver);
@@ -306,8 +308,8 @@ void FileTransferServiceTests::cancelsAndDisconnectsWithoutPublishing()
     QTemporaryDir source;
     QTemporaryDir target;
     QVERIFY(writeFile(source.path() + "/data.bin", QByteArray(5 * 1024 * 1024, '\x25')));
-    FileTransferService sender;
-    FileTransferService receiver;
+    FileTransferService sender(nullptr, m_storage.path());
+    FileTransferService receiver(nullptr, m_storage.path());
     sender.setClipboardEnabled(false);
     receiver.setClipboardEnabled(false);
     link(sender, receiver, [](const QString &type, QJsonObject &, QByteArray &) { return type != "files.chunk"; });

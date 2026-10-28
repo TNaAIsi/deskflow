@@ -12,6 +12,7 @@
 #include "deskflow/ClipboardChunk.h"
 #include "deskflow/ClipboardTypes.h"
 #include "deskflow/KeyTypes.h"
+#include "deskflow/OptionTypes.h"
 
 class Client;
 class ClientInfo;
@@ -70,6 +71,11 @@ protected:
   {
     return m_stream;
   }
+  KeyID translatePhysicalModifier(KeyID id) const
+  {
+    return translateKey(id);
+  }
+  void updateModifierTranslation(const OptionsList &options);
 
 private:
   // if compressing mouse motion then send the last motion now

@@ -7,8 +7,17 @@
 #pragma once
 
 #include <QDialog>
+#include <QJsonObject>
 
 class SettingsDialogButtonBox;
+class SharingSettingsWidget;
+class QTabWidget;
+class QCheckBox;
+class QLabel;
+class QPushButton;
+namespace deskflow::workspace {
+class WorkspaceService;
+}
 
 namespace Ui {
 class ClientConfigDialog;
@@ -25,6 +34,13 @@ class ClientConfigDialog : public QDialog
 public:
   explicit ClientConfigDialog(QWidget *parent = nullptr);
   ~ClientConfigDialog() override;
+  void setSharingService(deskflow::workspace::WorkspaceService *service);
+  void setSharingState(const QJsonObject &state);
+  bool requiresCoreRestart() const;
+  void setNativeKeyboardStatus(const QString &status);
+
+Q_SIGNALS:
+  void requestNativeKeyboardSetup();
 
 protected:
   void changeEvent(QEvent *e) override;
@@ -46,6 +62,7 @@ private:
    * @return true when any client settings in the gui do not match the stored settings values.
    */
   bool isModified() const;
+  bool isInputModified() const;
 
   /**
    * @brief isDefault
@@ -76,4 +93,10 @@ private:
 
   Ui::ClientConfigDialog *ui = nullptr;
   SettingsDialogButtonBox *m_buttonBox = nullptr;
+  SharingSettingsWidget *m_sharing = nullptr;
+  QTabWidget *m_tabs = nullptr;
+  bool m_requiresCoreRestart = false;
+  QCheckBox *m_nativeKeyboard = nullptr;
+  QLabel *m_nativeKeyboardStatus = nullptr;
+  QPushButton *m_nativeKeyboardSetup = nullptr;
 };

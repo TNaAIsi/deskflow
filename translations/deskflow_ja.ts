@@ -181,6 +181,34 @@ p, li { white-space: pre-wrap; }
         <source>Use Caps Lock to switch input sources on this Mac</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Use a virtual HID keyboard for physical key input</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use this Mac&apos;s keyboard layout, input method and Caps Lock behavior. Set up the keyboard component before enabling this option.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Virtual keyboard support requires the system component to be installed and enabled.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Set up virtual keyboard…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keyboard and mouse</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sound</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Files and cache</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ComputerSettingsDialog</name>
@@ -579,24 +607,8 @@ Do you want to connect to the server?
         <translation>切断</translation>
     </message>
     <message>
-        <source>Shared workspace…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>&lt;p&gt;Failed to connect to the server &apos;%1&apos;.&lt;/p&gt;&lt;p&gt;A Client with your name is already connected to the server.&lt;/p&gt;Please ensure that you&apos;re using a unique name and that only a single instance of the client process is running.&lt;/p&gt;</source>
         <translation>&lt;p&gt;サーバー &apos;%1&apos; への接続に失敗しました。&lt;/p&gt;&lt;p&gt;同じ名前のクライアントがサーバーに接続済です。&lt;/p&gt;&lt;p&gt;名前の重複がないことと、クライアントプロセスが多重起動していない事を確認してください。&lt;/p&gt;</translation>
-    </message>
-    <message>
-        <source>Display layout</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Layout is controlled by the server&apos;s configuration file. Disable the external configuration in Server Configuration before using the visual layout.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Connect to the server before changing its display layout.</source>
-        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>View &amp;Help</source>
@@ -700,6 +712,50 @@ A bound IP is now invalid, you may need to restart the server.</source>
         <source>Ctrl+Q</source>
         <extracomment>Quit shortcut</extracomment>
         <translation>Ctrl+Q</translation>
+    </message>
+    <message>
+        <source>Native keyboard</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not open system extension activation.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Use the full macOS installer package to install Deskflow and its native keyboard component, then approve the system extension.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not open the native keyboard component installer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Install the full macOS package to add the native keyboard component, then approve its system extension.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting for a keyboard connection to negotiate physical key input.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This connection is receiving physical keys through the virtual HID keyboard.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Physical keyboard input is negotiated and ready for switching to this Mac.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This connection uses compatibility input. Update both computers to a version supporting physical keys.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Physical keyboard input stopped after a component error. Reconnect after repairing the component.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This connection currently uses compatibility input. Enable the component and reconnect to use physical keys.</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>The name you have chosen is invalid.
@@ -951,6 +1007,46 @@ Additionally, check you are able to %1 the server config file: %2</source>
         <source>Disconnected</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Native virtual keyboard output is available on macOS clients.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Virtual keyboard component is ready. Physical keys are used after reconnecting with this option enabled.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Approve the Karabiner virtual HID system extension in macOS settings, then reconnect.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The native keyboard component belongs to another installation or login session. Run component setup again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The virtual HID component version does not match. Run component setup again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Another Deskflow input session is using the virtual keyboard.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The component is installed. Enable physical keyboard input and reconnect to initialize it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The virtual HID service is not ready. Run component setup and approve its system extension.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Native keyboard component is not running. Install or repair it using Component setup.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Native keyboard component did not respond. Run Component setup again.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>SearchWidget</name>
@@ -1114,11 +1210,11 @@ Enabling this setting will disable the server config GUI.</source>
         <translation>設定ファイルのパス</translation>
     </message>
     <message>
-        <source>Display layout…</source>
+        <source>Sound</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Display layout has its own Save button. Saving or cancelling server settings does not undo saved display positions.</source>
+        <source>Files and cache</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1138,23 +1234,31 @@ Enabling this setting will disable the server config GUI.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>External configuration file controls computer links. Turn off external configuration and save server settings before arranging displays here.</source>
+        <source>Add a game if automatic detection misses it, such as a borderless game on a single monitor. Listed programs are protected only while full-screen.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Independent monitor layout. Computer positions are edited in Display layout; the list manages computer identity and keyboard settings.</source>
+        <source>Add game…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Compatibility computer layout is selected. Each computer is one block in the grid below. Use Display layout to arrange individual monitors instead.</source>
+        <source>Remove selected game</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The external configuration file controls computer links. Turn it off to edit the layout here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Drag the displays below to match your desk. Save applies display positions and the other server settings together.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Computer grid mode groups each computer into one block. Enable individual monitors below for independent screen placement.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Compatibility layout: drag whole computers to set their crossing directions.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Save computer changes before arranging displays.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1163,6 +1267,14 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Aliases: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Choose a game executable</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Windows programs (*.exe)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1179,15 +1291,15 @@ Enabling this setting will disable the server config GUI.</source>
         <translation>起動時にコンピューター間移動のロックを有効にする</translation>
     </message>
     <message>
-        <source>Keep the cursor on this Windows computer while its foreground window fills a monitor (including videos), or an application confines the cursor. Explicit switch hotkeys still work. This does not change manual cursor locking.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Keep cursor local during full-screen apps or capture</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Displays and computers</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Automatically keep control on this Windows computer when a full-screen game captures the pointer or uses exclusive rendering. Add a game below if automatic detection misses it. Listed games still require full-screen mode. Full-screen display alone, or cursor capture in a windowed app, does not trigger protection. Explicit switch shortcuts still work.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Keep keyboard and mouse here during full-screen games</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1414,6 +1526,245 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
 </context>
 <context>
+    <name>SharingSettingsWidget</name>
+    <message>
+        <source>Complete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Updating clipboard</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Received; newer clipboard kept</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transferring</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Requesting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Waiting to receive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancelled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Interrupted</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation type="unfinished">エラー</translation>
+    </message>
+    <message>
+        <source>Share this computer&apos;s system sound</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Play the server&apos;s sound</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Share copied files and folders</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Receive selected copied files…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Computer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Direction</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Progress</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>State</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Updated</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cancel transfer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open received location</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear completed history</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cached files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open selected cache</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remove selected cache</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clear unused cache</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Share the Windows system output with connected clients. Sound routing stays fixed when the mouse changes computers; local playback continues.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Receive the server&apos;s system sound and play it through this computer&apos;s selected output. Sound keeps playing when the pointer returns to the server.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Send sound to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Receive sound from</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Play through</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>System sound capture is available when Windows is the server.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Playback includes network and output-device buffering. Wired headphones avoid additional Bluetooth delay.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source> MiB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No size limit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Automatically receive copied files up to</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Copy files in Explorer or Finder, wait for the transfer to finish, then paste on the other computer. Manage transfer records and received cache below.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Received file cache</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cache removal affects received copies only. Files used by the clipboard or an active transfer are protected. Clearing history does not delete files.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>All connected clients</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Connected server</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 (offline)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>System default output</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 connected computer(s). Copied files are shared automatically within the configured limit.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>File sharing is stopped. Received files and cache remain available for management.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 — %2 (%3)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source> · cache removed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Receive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Send</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 / %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Calculating cache usage…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>%1 in %2 cached file(s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Active transfer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>In clipboard</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Available</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save received files</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>StatusBar</name>
     <message>
         <source>%1 is not running</source>
@@ -1445,7 +1796,7 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message numerus="yes">
         <source>%1 is connected, with %n client(s): %2</source>
-        <extracomment>Shown when in server mode and at least 1 client is connected %1 is replaced by the app name %2 will be a list of at least one client %n will be replaced by the number of clients (n is &gt;=1), it is not requried to be in the translation</extracomment>
+        <extracomment>%1 is the application name; %2 lists currently connected clients.</extracomment>
         <translation>
             <numerusform>%1 は%n台のクライアントと接続中: %2</numerusform>
         </translation>
@@ -1455,6 +1806,10 @@ Enabling this setting will disable the server config GUI.</source>
  %1</source>
         <translation>クライアント:
  %1</translation>
+    </message>
+    <message>
+        <source>%1 is connected</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>A new version v%1 is available</source>
@@ -1488,239 +1843,8 @@ Enabling this setting will disable the server config GUI.</source>
 <context>
     <name>WorkspaceDialog</name>
     <message>
-        <source>Complete</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Updating clipboard</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Received; clipboard kept</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Transferring</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Requesting</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Available</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cancelled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Error</source>
-        <translation type="unfinished">エラー</translation>
-    </message>
-    <message>
-        <source>Enable shared workspace</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Share copied files and folders</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Share this Windows computer&apos;s system sound</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Play sound from the other computer</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Shared workspace</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source> MiB</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>No size limit</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Automatically receive copied files up to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Send selected files to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Choose files…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Choose folder…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Copy in Explorer or Finder, wait for transfer completion, then paste on the other computer. Source files remain unchanged. Larger offers and manually shared files are available below.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Available from other computers</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Save selected offer to…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>File</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Computer</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Direction</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Progress</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>State</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Cancel transfer</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Open received location</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Clear completed clipboard cache</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Files</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Sound routing stays fixed when the mouse changes computers. Enable sending on Windows and playback on the Mac. Local Windows output continues playing.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>System sound capture is available on Windows.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Send sound to</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Receive sound from</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Play through</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Use wired networking and wired headphones for the lowest latency. Bluetooth adds its own playback delay. Sending and receiving simultaneously is disabled to prevent audio loops.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Sound</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Arrange every physical monitor independently, including monitors belonging to the same computer. Touching edges define where the pointer crosses. Use Identify to match the layout to your desk.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Monitors</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Share files</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Share folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 (offline)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Layout is controlled by the server&apos;s configuration file.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Independent monitor layout is selected. The computer grid does not control pointer directions.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Computer grid layout is selected. Enable independent monitors in Display layout to arrange each screen.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>All connected computers</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>First active source</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>System default output</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>%1 · workspace port %2 · %3 connected computer(s)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Shared workspace is disabled or unavailable. Keyboard and mouse use their normal connection.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Receive</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Send</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Start sharing to connect the shared workspace.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Display layout…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Start sharing before sending files.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Save received files</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>WorkspaceDropArea</name>
-    <message>
-        <source>Drop files or folders here to share with the selected computer</source>
-        <translation type="unfinished"></translation>
+        <translation type="obsolete">エラー</translation>
     </message>
 </context>
 <context>
@@ -1773,11 +1897,14 @@ Enabling this setting will disable the server config GUI.</source>
 <context>
     <name>deskflow::workspace::DisplayLayoutDialog</name>
     <message>
-        <source>Arrange and route each monitor separately</source>
+        <source>Individual monitor layout</source>
         <translation type="unfinished"></translation>
     </message>
+</context>
+<context>
+    <name>deskflow::workspace::DisplayLayoutWidget</name>
     <message>
-        <source>Individual monitor layout</source>
+        <source>Arrange and route each monitor separately</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1785,7 +1912,7 @@ Enabling this setting will disable the server config GUI.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>When enabled, this canvas controls pointer directions and the computer grid is inactive. Devices without display information stay outside automatic switching. Disable this option to use the computer grid again; your monitor positions are kept. Saving here applies immediately.</source>
+        <source>When enabled, this canvas controls pointer directions and the computer grid is inactive. Devices without display information stay outside automatic switching. Disable this option to use the computer grid again; your monitor positions are kept. Changes are applied with the configuration dialog Save button.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1821,16 +1948,52 @@ Enabling this setting will disable the server config GUI.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Overlapping monitors</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>Move the monitors so their interiors do not overlap. Touching edges are allowed.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>deskflow::workspace::FileTransferService</name>
+    <message>
+        <source>The previous session ended before this transfer completed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Could not save file transfer history. Check available disk space and folder permissions.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Invalid cached transfer identifier.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Wait for file transfers and cache statistics to finish before clearing the cache.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>The managed cache directory cannot be a symbolic link.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This cached transfer is still referenced by the clipboard or contains manually saved files.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A cache folder contains unsupported links or too many entries to remove safely.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>A cache folder changed while cleanup was running.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cannot protect a manual destination inside the managed cache. Choose another folder.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Move manually saved files out of the cache directory before cleaning it.</source>
+        <translation type="unfinished"></translation>
+    </message>
     <message>
         <source>Superseded by a newer file clipboard.</source>
         <translation type="unfinished"></translation>
@@ -1841,10 +2004,6 @@ Enabling this setting will disable the server config GUI.</source>
     </message>
     <message>
         <source>Files were received, but the clipboard is busy. Open their received location.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <source>Wait for file transfers to finish before clearing the clipboard cache.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

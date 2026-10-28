@@ -72,11 +72,12 @@ def main():
     close_list()
     pictures = []
     for filename, caption in (
-        ("server-monitors.png", "服务端的统一显示器布局入口与电脑设置"),
+        ("server-monitors.png", "服务端配置中的嵌入式显示器画布与电脑设置"),
         ("server-computers.png", "明确选择后的整机兼容布局"),
-        ("workspace-files.png", "文件共享与传输进度"),
-        ("workspace-audio.png", "固定音频路由"),
-        ("workspace-monitors.png", "独立显示器布局示例"),
+        ("server-game-protection.png", "服务端原高级页中的全屏游戏保护"),
+        ("client-input.png", "客户端原页面中的键盘与鼠标设置"),
+        ("client-sound.png", "客户端配置中的声音接收与输出"),
+        ("client-files.png", "客户端配置中的传输记录与缓存管理"),
     ):
         image = Path(args.images) / filename
         if image.is_file():
@@ -87,7 +88,7 @@ def main():
     revision = html.escape(args.revision[:12])
     result = """<!doctype html><html lang="zh-CN"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Deskflow 共享工作台使用说明</title><style>
+<title>Deskflow 1.29.0 安装与功能说明</title><style>
 :root{color-scheme:light dark;--bg:#f5f7fb;--paper:#fff;--ink:#17233a;--muted:#53627a;--line:#dce3ef;--accent:#215ed0}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);
 font:16px/1.85 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}main{max-width:1000px;margin:auto;
@@ -104,9 +105,9 @@ footer{margin-top:38px;border-top:1px solid var(--line);padding-top:16px}
 @media(prefers-color-scheme:dark){:root{--bg:#111826;--paper:#192336;--ink:#ecf1fa;--muted:#adbbd1;--line:#35445e;--accent:#8fb5ff}}
 @media(max-width:640px){main{padding:24px 20px}h1{font-size:28px}nav{display:block}nav a{display:block;margin:6px 0}}
 @media print{body,main{background:white;color:black}main{padding:0;max-width:none}nav{display:none}details{display:none}h2{break-after:avoid}}
-</style><main><h1>Deskflow 共享工作台</h1>
-<p class="meta">1.28.1 Workspace · 安装与功能说明</p>
-<div class="badges"><span>Mac 输入源切换</span><span>全屏防误切</span><span>系统声音</span><span>文件复制</span><span>独立显示器</span></div>
+</style><main><h1>Deskflow 使用说明</h1>
+<p class="meta">1.29.0 · 安装与功能说明</p>
+<div class="badges"><span>Mac 物理按键</span><span>全屏游戏保护</span><span>系统声音</span><span>文件复制</span><span>历史与缓存</span><span>原页面显示器布局</span></div>
 """
     result += "<nav>" + "".join(navigation) + "</nav>" + gallery + "\n".join(body)
     result += f'<footer class="meta">源代码版本：{revision or "见安装包验证记录"}。'

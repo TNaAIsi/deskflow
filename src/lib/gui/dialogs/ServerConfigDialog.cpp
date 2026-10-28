@@ -10,6 +10,7 @@
 #include "ui_ServerConfigDialog.h"
 
 #include "common/Constants.h"
+#include "common/FullscreenGamePrograms.h"
 #include "common/NetworkProtocol.h"
 #include "common/PlatformInfo.h"
 #include "common/Settings.h"
@@ -17,14 +18,18 @@
 #include "dialogs/ComputerSettingsDialog.h"
 #include "dialogs/HotkeyDialog.h"
 #include "gui/widgets/SettingsDialogButtonBox.h"
+#include "gui/widgets/SharingSettingsWidget.h"
+#include "workspace/DisplayLayoutDialog.h"
 #include "workspace/DisplayTopology.h"
 
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QLabel>
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 
@@ -46,27 +51,18 @@ ServerConfigDialog::ServerConfigDialog(QWidget *parent, ServerConfig &config)
   ui->tabWidget->setCurrentIndex(0);
   layout()->addWidget(m_buttonBox);
 
+  resize(1050, 800);
   auto *computersLayout = qobject_cast<QVBoxLayout *>(ui->tabComputers->layout());
-  auto *layoutPanel = new QWidget(ui->tabComputers);
-  auto *layoutPanelLayout = new QVBoxLayout(layoutPanel);
-  layoutPanelLayout->setContentsMargins(0, 0, 0, 0);
-  m_layoutModeLabel = new QLabel(layoutPanel);
+  m_layoutModeLabel = new QLabel(ui->tabComputers);
   m_layoutModeLabel->setObjectName("layoutModeLabel");
   m_layoutModeLabel->setWordWrap(true);
-  layoutPanelLayout->addWidget(m_layoutModeLabel);
-  m_displayLayoutButton = new QPushButton(tr("Display layout…"), layoutPanel);
-  m_displayLayoutButton->setObjectName("displayLayoutButton");
-  m_displayLayoutButton->setAutoDefault(false);
-  layoutPanelLayout->addWidget(m_displayLayoutButton);
-  auto *layoutScope = new QLabel(
-      tr("Display layout has its own Save button. Saving or cancelling server settings does not undo saved display "
-         "positions."),
-      layoutPanel
-  );
-  layoutScope->setObjectName("displayLayoutScope");
-  layoutScope->setWordWrap(true);
-  layoutPanelLayout->addWidget(layoutScope);
-  computersLayout->insertWidget(0, layoutPanel);
+  computersLayout->insertWidget(0, m_layoutModeLabel);
+  m_displayLayoutEditor = new deskflow::workspace::DisplayLayoutWidget({}, ui->tabComputers);
+  computersLayout->insertWidget(1, m_displayLayoutEditor, 1);
+
+  m_sharingSettings = new SharingSettingsWidget(true, this);
+  ui->tabWidget->addTab(m_sharingSettings->soundPage(), tr("Sound"));
+  ui->tabWidget->addTab(m_sharingSettings->filesPage(), tr("Files and cache"));
 
   m_registeredComputersPanel = new QWidget(ui->tabComputers);
   m_registeredComputersPanel->setObjectName("registeredComputersPanel");
@@ -80,7 +76,8 @@ ServerConfigDialog::ServerConfigDialog(QWidget *parent, ServerConfig &config)
   registeredLayout->addWidget(registeredHelp);
   m_registeredComputers = new QListWidget(m_registeredComputersPanel);
   m_registeredComputers->setObjectName("registeredComputers");
-  registeredLayout->addWidget(m_registeredComputers, 1);
+  m_registeredComputers->setMaximumHeight(95);
+  registeredLayout->addWidget(m_registeredComputers);
   auto *registeredButtons = new QHBoxLayout;
   m_addRegisteredComputer = new QPushButton(tr("Add computer…"), m_registeredComputersPanel);
   m_addRegisteredComputer->setObjectName("addRegisteredComputer");
@@ -94,12 +91,55 @@ ServerConfigDialog::ServerConfigDialog(QWidget *parent, ServerConfig &config)
   }
   registeredButtons->addStretch();
   registeredLayout->addLayout(registeredButtons);
-  computersLayout->addWidget(m_registeredComputersPanel, 1);
+  computersLayout->addWidget(m_registeredComputersPanel);
+
+  m_gameProgramsPanel = new QWidget(ui->cbPreventFullscreenSwitch->parentWidget());
+  m_gameProgramsPanel->setObjectName("fullscreenGameProgramsPanel");
+  auto *gameProgramsLayout = new QVBoxLayout(m_gameProgramsPanel);
+  gameProgramsLayout->setContentsMargins(18, 0, 0, 0);
+  auto *gameProgramsHelp = new QLabel(
+      tr("Add a game if automatic detection misses it, such as a borderless game on a single monitor. Listed "
+         "programs are protected only while full-screen."),
+      m_gameProgramsPanel
+  );
+  gameProgramsHelp->setWordWrap(true);
+  gameProgramsLayout->addWidget(gameProgramsHelp);
+  m_gamePrograms = new QListWidget(m_gameProgramsPanel);
+  m_gamePrograms->setObjectName("fullscreenGamePrograms");
+  m_gamePrograms->setMaximumHeight(75);
+  gameProgramsLayout->addWidget(m_gamePrograms);
+  auto *gameProgramButtons = new QHBoxLayout;
+  m_addGameProgram = new QPushButton(tr("Add game…"), m_gameProgramsPanel);
+  m_addGameProgram->setObjectName("addFullscreenGameProgram");
+  m_removeGameProgram = new QPushButton(tr("Remove selected game"), m_gameProgramsPanel);
+  m_removeGameProgram->setObjectName("removeFullscreenGameProgram");
+  for (auto *button : {m_addGameProgram, m_removeGameProgram}) {
+    button->setAutoDefault(false);
+    gameProgramButtons->addWidget(button);
+  }
+  gameProgramButtons->addStretch();
+  gameProgramsLayout->addLayout(gameProgramButtons);
+  if (auto *switchingLayout = qobject_cast<QVBoxLayout *>(ui->cbPreventFullscreenSwitch->parentWidget()->layout()))
+    switchingLayout->insertWidget(switchingLayout->indexOf(ui->cbPreventFullscreenSwitch) + 1, m_gameProgramsPanel);
+
+  // Keep the existing Advanced page usable on laptop-height displays as its
+  // switching controls grow; the dialog's single Save/Cancel row stays fixed.
+  auto *advancedContents = new QWidget(ui->tabAdvanced);
+  advancedContents->setLayout(ui->tabAdvanced->layout());
+  auto *advancedScroll = new QScrollArea(ui->tabAdvanced);
+  advancedScroll->setObjectName("serverAdvancedScroll");
+  advancedScroll->setWidgetResizable(true);
+  advancedScroll->setFrameShape(QFrame::NoFrame);
+  advancedScroll->setWidget(advancedContents);
+  auto *advancedLayout = new QVBoxLayout(ui->tabAdvanced);
+  advancedLayout->setContentsMargins(0, 0, 0, 0);
+  advancedLayout->addWidget(advancedScroll);
 
   auto topology = deskflow::workspace::DisplayTopology::instance().serializedState();
   if (topology.isEmpty())
     topology = QJsonDocument::fromJson(Settings::value(Settings::Workspace::Layout).toString().toUtf8()).object();
   m_layoutState = {{"topology", topology}};
+  m_displayLayoutEditor->setState(topology, false);
 
   loadFromConfig();
 
@@ -111,12 +151,18 @@ ServerConfigDialog::ServerConfigDialog(QWidget *parent, ServerConfig &config)
   if (!deskflow::platform::isWindows()) {
     ui->cbWin32KeepForeground->setVisible(false);
     ui->cbPreventFullscreenSwitch->setVisible(false);
+    m_gameProgramsPanel->setVisible(false);
   }
   initConnections();
   refreshRegisteredComputers();
 }
 
-ServerConfigDialog::~ServerConfigDialog() = default;
+ServerConfigDialog::~ServerConfigDialog()
+{
+  for (auto *child : findChildren<QObject *>())
+    disconnect(child, nullptr, this, nullptr);
+  disconnect(&m_computerSetupModel, nullptr, this, nullptr);
+}
 
 bool ServerConfigDialog::addClient(const QString &clientName)
 {
@@ -126,46 +172,48 @@ bool ServerConfigDialog::addClient(const QString &clientName)
 void ServerConfigDialog::setLayoutState(const QJsonObject &state)
 {
   m_layoutState = state;
-  refreshLayoutControls();
+  m_displayLayoutEditor->setState(state.value("topology").toObject());
+  m_sharingSettings->refresh(state);
+  setButtonBoxEnabledButtons();
+}
+
+void ServerConfigDialog::setSharingService(deskflow::workspace::WorkspaceService *service)
+{
+  m_sharingSettings->setService(service);
+}
+
+void ServerConfigDialog::setSharingState(const QJsonObject &state)
+{
+  m_sharingSettings->refresh(state);
 }
 
 void ServerConfigDialog::refreshLayoutControls() const
 {
   const bool external = ui->groupExternalConfig->isChecked();
-  const auto mode = m_layoutState.value("layoutMode").toString();
-  const bool monitors =
-      !external &&
-      (mode == "monitors" || (mode.isEmpty() && m_layoutState.value("topology").toObject().value("enabled").toBool()));
+  const bool monitors = !external && m_displayLayoutEditor->independentEnabled();
   if (external) {
     m_layoutModeLabel->setText(
-        tr("External configuration file controls computer links. Turn off external configuration and save server "
-           "settings before arranging displays here.")
+        tr("The external configuration file controls computer links. Turn it off to edit the layout here.")
     );
   } else if (monitors) {
     m_layoutModeLabel->setText(
-        tr("Independent monitor layout. Computer positions are edited in Display layout; the list manages computer "
-           "identity and keyboard settings.")
+        tr("Drag the displays below to match your desk. Save applies display positions and the other server settings "
+           "together.")
     );
   } else {
     m_layoutModeLabel->setText(
-        tr("Compatibility computer layout is selected. Each computer is one block in the grid below. Use Display "
-           "layout to arrange individual monitors instead.")
+        tr("Computer grid mode groups each computer into one block. Enable individual monitors below for independent "
+           "screen placement.")
     );
   }
+  m_displayLayoutEditor->setVisible(!external);
+  m_displayLayoutEditor->setEnabled(Settings::isWritable() && !external);
   ui->computerSetupView->setVisible(!monitors && !external);
   ui->lblRemoveComputer->setVisible(!monitors && !external);
   ui->lblNewComputer->setVisible(!monitors && !external);
   ui->label_2->setVisible(!monitors && !external);
   ui->label_2->setText(tr("Compatibility layout: drag whole computers to set their crossing directions."));
   m_registeredComputersPanel->setVisible(monitors);
-
-  const bool changedComputers = !(m_originalServerConfig == m_serverConfig);
-  const bool changedExternal = external != m_originalServerConfigIsExternal ||
-                               ui->lineConfigFile->text() != m_originalServerConfigUsesExternalFile;
-  m_displayLayoutButton->setEnabled(Settings::isWritable() && !external && !changedComputers && !changedExternal);
-  m_displayLayoutButton->setToolTip(
-      changedComputers || changedExternal ? tr("Save computer changes before arranging displays.") : QString()
-  );
 
   const auto *selected = m_registeredComputers->currentItem();
   const int selectedIndex = selected ? selected->data(Qt::UserRole).toInt() : -1;
@@ -225,8 +273,65 @@ void ServerConfigDialog::removeRegisteredComputer()
   Q_EMIT m_computerSetupModel.computersChanged();
 }
 
+void ServerConfigDialog::addFullscreenGameProgram()
+{
+  if (!m_addGameProgram->isEnabled())
+    return;
+  const auto filename =
+      QFileDialog::getOpenFileName(this, tr("Choose a game executable"), {}, tr("Windows programs (*.exe)"));
+  if (filename.isEmpty() || !QFileInfo(filename).isFile())
+    return;
+  const auto path = deskflow::cleanFullscreenGameProgramPath(QFileInfo(filename).absoluteFilePath());
+  if (path.isEmpty() || m_fullscreenGamePrograms.contains(path, Qt::CaseInsensitive))
+    return;
+  m_fullscreenGamePrograms.append(path);
+  refreshFullscreenGamePrograms();
+  setButtonBoxEnabledButtons();
+}
+
+void ServerConfigDialog::removeFullscreenGameProgram()
+{
+  if (!m_removeGameProgram->isEnabled() || !m_gamePrograms->currentItem())
+    return;
+  const auto row = m_gamePrograms->currentRow();
+  if (row < 0 || row >= m_fullscreenGamePrograms.size())
+    return;
+  m_fullscreenGamePrograms.removeAt(row);
+  refreshFullscreenGamePrograms();
+  setButtonBoxEnabledButtons();
+}
+
+void ServerConfigDialog::refreshFullscreenGamePrograms()
+{
+  const QSignalBlocker blocker(m_gamePrograms);
+  m_gamePrograms->clear();
+  m_gamePrograms->addItems(m_fullscreenGamePrograms);
+  if (m_gamePrograms->count())
+    m_gamePrograms->setCurrentRow(0);
+  for (int row = 0; row < m_gamePrograms->count(); ++row)
+    m_gamePrograms->item(row)->setToolTip(m_gamePrograms->item(row)->text());
+  updateGameProgramControls();
+}
+
+void ServerConfigDialog::updateGameProgramControls() const
+{
+  const bool enabled = Settings::isWritable() && m_preventFullscreenSwitch;
+  m_gamePrograms->setEnabled(enabled);
+  m_addGameProgram->setEnabled(enabled && m_fullscreenGamePrograms.size() < deskflow::kMaximumFullscreenGamePrograms);
+  m_removeGameProgram->setEnabled(enabled && m_gamePrograms->currentRow() >= 0);
+}
+
 void ServerConfigDialog::save()
 {
+  QString layoutError;
+  if (!ui->groupExternalConfig->isChecked() && !m_displayLayoutEditor->validate(&layoutError)) {
+    ui->tabWidget->setCurrentIndex(0);
+    m_displayLayoutEditor->setSaveError(layoutError);
+    return;
+  }
+  m_inputConfigChanged = isGeneralConfigModified() || !(m_originalServerConfig == m_serverConfig);
+  const bool layoutChanged = m_displayLayoutEditor->isModified() && !ui->groupExternalConfig->isChecked();
+  const auto layout = m_displayLayoutEditor->layoutState();
   if (ui->groupExternalConfig->isChecked() && !QFile::exists(ui->lineConfigFile->text())) {
 
     auto selectedButton = QMessageBox::warning(
@@ -257,6 +362,7 @@ void ServerConfigDialog::save()
   Settings::setValue(Settings::Server::SwitchDoubleTap, m_switchDoubleTap);
   Settings::setValue(Settings::Server::RelativeMouseMoves, m_relativeMouseMoves);
   Settings::setValue(Settings::Server::PreventFullscreenSwitch, m_preventFullscreenSwitch);
+  Settings::setValue(Settings::Server::FullscreenGamePrograms, m_fullscreenGamePrograms);
   Settings::setValue(Settings::Server::Win32KeepForeground, m_win32keepForeground);
   Settings::setValue(Settings::Server::ExternalConfig, ui->groupExternalConfig->isChecked());
   Settings::setValue(Settings::Server::ExternalConfigFile, ui->lineConfigFile->text());
@@ -272,6 +378,13 @@ void ServerConfigDialog::save()
     Settings::setValue(Settings::Computer::Name.arg(computerName), computerName);
   }
   Settings::removeUnknownComputers(computerNames);
+  if (layoutChanged) {
+    Settings::setValue(
+        Settings::Workspace::Layout, QString::fromUtf8(QJsonDocument(layout).toJson(QJsonDocument::Compact))
+    );
+    Q_EMIT displayLayoutSaved(layout);
+  }
+  m_sharingSettings->saveOptions();
   QDialog::accept();
 }
 
@@ -563,6 +676,9 @@ void ServerConfigDialog::loadFromConfig()
   m_heartbeatRate = Settings::value(Settings::Server::Heartbeat).toInt();
   m_relativeMouseMoves = Settings::value(Settings::Server::RelativeMouseMoves).toBool();
   m_preventFullscreenSwitch = Settings::value(Settings::Server::PreventFullscreenSwitch).toBool();
+  m_fullscreenGamePrograms = deskflow::cleanFullscreenGameProgramList(
+      Settings::value(Settings::Server::FullscreenGamePrograms).toStringList()
+  );
   m_win32keepForeground = Settings::value(Settings::Server::Win32KeepForeground).toBool();
   m_enableSwitchDelay = Settings::value(Settings::Server::EnableSwitchDelay).toBool();
   m_switchDelay = Settings::value(Settings::Server::SwitchDelay).toInt();
@@ -603,6 +719,8 @@ void ServerConfigDialog::loadFromConfig()
 void ServerConfigDialog::resetFromSettings()
 {
   m_serverConfig = m_originalServerConfig;
+  m_displayLayoutEditor->setState(m_layoutState.value("topology").toObject(), false);
+  m_sharingSettings->reset();
   loadFromConfig();
   if (ui->tabWidget->currentWidget() == ui->tabComputers) {
     ui->computerSetupView->reset();
@@ -619,6 +737,7 @@ void ServerConfigDialog::refreshControls()
   ui->sbHeartbeat->setValue(m_heartbeatRate);
   ui->cbRelativeMouseMoves->setChecked(m_relativeMouseMoves);
   ui->cbPreventFullscreenSwitch->setChecked(m_preventFullscreenSwitch);
+  refreshFullscreenGamePrograms();
   ui->cbWin32KeepForeground->setChecked(m_win32keepForeground);
   ui->cbSwitchDelay->setChecked(m_enableSwitchDelay);
   ui->sbSwitchDelay->setEnabled(ui->cbSwitchDelay->isChecked());
@@ -641,7 +760,17 @@ void ServerConfigDialog::initConnections() const
   connect(m_buttonBox, &SettingsDialogButtonBox::rejected, this, &ServerConfigDialog::cancel);
   connect(m_buttonBox, &SettingsDialogButtonBox::reset, this, &ServerConfigDialog::resetFromSettings);
   connect(m_buttonBox, &SettingsDialogButtonBox::restoreDefault, this, &ServerConfigDialog::restoreFromDefaults);
-  connect(m_displayLayoutButton, &QPushButton::clicked, this, &ServerConfigDialog::displayLayoutRequested);
+  connect(
+      m_displayLayoutEditor, &deskflow::workspace::DisplayLayoutWidget::changed, this,
+      &ServerConfigDialog::setButtonBoxEnabledButtons
+  );
+  connect(
+      m_displayLayoutEditor, &deskflow::workspace::DisplayLayoutWidget::requestIdentify, this,
+      &ServerConfigDialog::identifyDisplayRequested
+  );
+  connect(
+      m_sharingSettings, &SharingSettingsWidget::modifiedChanged, this, &ServerConfigDialog::setButtonBoxEnabledButtons
+  );
   connect(m_addRegisteredComputer, &QPushButton::clicked, this, qOverload<>(&ServerConfigDialog::addClient));
   connect(m_editRegisteredComputer, &QPushButton::clicked, this, &ServerConfigDialog::editRegisteredComputer);
   connect(m_removeRegisteredComputer, &QPushButton::clicked, this, &ServerConfigDialog::removeRegisteredComputer);
@@ -680,6 +809,9 @@ void ServerConfigDialog::initConnections() const
 
   connect(ui->cbRelativeMouseMoves, &QCheckBox::toggled, this, &ServerConfigDialog::toggleRelativeMouseMoves);
   connect(ui->cbPreventFullscreenSwitch, &QCheckBox::toggled, this, &ServerConfigDialog::togglePreventFullscreenSwitch);
+  connect(m_addGameProgram, &QPushButton::clicked, this, &ServerConfigDialog::addFullscreenGameProgram);
+  connect(m_removeGameProgram, &QPushButton::clicked, this, &ServerConfigDialog::removeFullscreenGameProgram);
+  connect(m_gamePrograms, &QListWidget::currentRowChanged, this, [this] { updateGameProgramControls(); });
   connect(ui->cbEnableClipboard, &QCheckBox::toggled, this, &ServerConfigDialog::toggleClipboard);
   connect(ui->btnBrowseConfigFile, &QPushButton::clicked, this, &ServerConfigDialog::browseConfigFile);
   connect(ui->groupExternalConfig, &QGroupBox::toggled, this, &ServerConfigDialog::toggleExternalConfig);
@@ -727,11 +859,16 @@ void ServerConfigDialog::updateControls() const
 
 void ServerConfigDialog::restoreFromDefaults()
 {
+  m_displayLayoutEditor->setState(m_layoutState.value("topology").toObject(), false);
+  if (auto *mode = m_displayLayoutEditor->findChild<QCheckBox *>("independentMonitorMode"))
+    mode->setChecked(false);
+  m_sharingSettings->restoreDefaults();
   m_protocol = networkProtocolFromString(Settings::defaultValue(Settings::Server::Protocol).toString());
   m_enableHeartbeat = Settings::defaultValue(Settings::Server::EnableHeartbeat).toBool();
   m_heartbeatRate = Settings::defaultValue(Settings::Server::Heartbeat).toInt();
   m_relativeMouseMoves = Settings::defaultValue(Settings::Server::RelativeMouseMoves).toBool();
   m_preventFullscreenSwitch = Settings::defaultValue(Settings::Server::PreventFullscreenSwitch).toBool();
+  m_fullscreenGamePrograms = Settings::defaultValue(Settings::Server::FullscreenGamePrograms).toStringList();
   m_win32keepForeground = Settings::defaultValue(Settings::Server::Win32KeepForeground).toBool();
   m_enableSwitchDelay = Settings::defaultValue(Settings::Server::EnableSwitchDelay).toBool();
   m_switchDelay = Settings::defaultValue(Settings::Server::SwitchDelay).toInt();
@@ -789,6 +926,9 @@ bool ServerConfigDialog::isGeneralConfigModified() const
          m_switchDoubleTap != Settings::value(Settings::Server::SwitchDoubleTap).toInt() ||
          m_relativeMouseMoves != Settings::value(Settings::Server::RelativeMouseMoves).toBool() ||
          m_preventFullscreenSwitch != Settings::value(Settings::Server::PreventFullscreenSwitch).toBool() ||
+         m_fullscreenGamePrograms != deskflow::cleanFullscreenGameProgramList(
+                                         Settings::value(Settings::Server::FullscreenGamePrograms).toStringList()
+                                     ) ||
          m_win32keepForeground != Settings::value(Settings::Server::Win32KeepForeground).toBool() ||
          m_disableLockToComputer != Settings::value(Settings::Server::DisableLockToComputer).toBool() ||
          m_defaultLockToComputerState != Settings::value(Settings::Server::DefaultLockToComputerState).toBool();
@@ -809,6 +949,7 @@ bool ServerConfigDialog::isGeneralConfigDefault() const
          m_switchDoubleTap == Settings::defaultValue(Settings::Server::SwitchDoubleTap).toInt() &&
          m_relativeMouseMoves == Settings::defaultValue(Settings::Server::RelativeMouseMoves).toBool() &&
          m_preventFullscreenSwitch == Settings::defaultValue(Settings::Server::PreventFullscreenSwitch).toBool() &&
+         m_fullscreenGamePrograms == Settings::defaultValue(Settings::Server::FullscreenGamePrograms).toStringList() &&
          m_win32keepForeground == Settings::defaultValue(Settings::Server::Win32KeepForeground).toBool() &&
          m_disableLockToComputer == Settings::defaultValue(Settings::Server::DisableLockToComputer).toBool() &&
          m_defaultLockToComputerState == Settings::defaultValue(Settings::Server::DefaultLockToComputerState).toBool();
@@ -817,8 +958,15 @@ bool ServerConfigDialog::isGeneralConfigDefault() const
 void ServerConfigDialog::setButtonBoxEnabledButtons() const
 {
   const bool writable = Settings::isWritable();
-  m_buttonBox->enableSave(writable && (isGeneralConfigModified() || !(m_originalServerConfig == m_serverConfig)));
-  m_buttonBox->enableReset(writable && (isGeneralConfigModified() || !(m_originalServerConfig == m_serverConfig)));
-  m_buttonBox->enableRestoreDefaults(writable && !isGeneralConfigDefault() && ui->tabWidget->currentIndex() == 2);
+  const bool modified = isGeneralConfigModified() || !(m_originalServerConfig == m_serverConfig) ||
+                        m_displayLayoutEditor->isModified() || m_sharingSettings->isModified();
+  m_buttonBox->enableSave(writable && modified);
+  m_buttonBox->enableReset(writable && modified);
+  m_buttonBox->enableRestoreDefaults(
+      writable && ((ui->tabWidget->currentIndex() >= 3 && !m_sharingSettings->isDefault()) ||
+                   (ui->tabWidget->currentIndex() == 0 && m_displayLayoutEditor->independentEnabled()) ||
+                   (ui->tabWidget->currentIndex() == 2 && !isGeneralConfigDefault()))
+  );
   refreshLayoutControls();
+  updateGameProgramControls();
 }

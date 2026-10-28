@@ -25,9 +25,9 @@ constexpr int kAmplitude = 9830;         // ~30% of int16 max
 } // namespace
 
 ClientProxy1_9::ClientProxy1_9(
-    const std::string &name, deskflow::IStream *adoptedStream, Server *server, IEventQueue *events
+    const std::string &name, deskflow::IStream *adoptedStream, Server *server, IEventQueue *events, bool syncLanguages
 )
-    : ClientProxy1_8(name, adoptedStream, server, events),
+    : ClientProxy1_8(name, adoptedStream, server, events, syncLanguages),
       m_events(events)
 {
 }

@@ -26,6 +26,9 @@ private Q_SLOTS:
   void audio_startsAfterOptionsAndReceiverReady();
   void audio_invalidOptionsDoNotStart();
   void audio_unsolicitedReadyDoesNotStart();
+  void nativeKeyboardNegotiatesExplicitlyAndSendsPhysicalUsages();
+  void nativeKeyboardUnsupportedSourceKeepsLegacyWire();
+  void nativeKeyboardBroadcastCompatibilityCanRestoreNativeSession();
 
 private:
   Log m_log;

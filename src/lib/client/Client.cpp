@@ -12,6 +12,7 @@
 #include "base/IEventQueue.h"
 #include "base/Log.h"
 #include "client/ServerProxy.h"
+#include "client/ServerProxy1_10.h"
 #include "client/ServerProxy1_7.h"
 #include "client/ServerProxy1_8.h"
 #include "client/ServerProxy1_9.h"
@@ -274,6 +275,11 @@ void Client::keyDown(KeyID id, KeyModifierMask mask, KeyButton button, const std
   m_computer->keyDown(id, mask, button, lang);
 }
 
+void Client::releaseKeyboardState()
+{
+  m_computer->getPlatformComputer()->fakeAllKeysUp();
+}
+
 void Client::keyRepeat(KeyID id, KeyModifierMask mask, int32_t count, KeyButton button, const std::string &lang)
 {
   m_computer->keyRepeat(id, mask, count, button, lang);
@@ -470,6 +476,8 @@ bool Client::setupComputer(int16_t protocolMinor)
   assert(m_server == nullptr);
 
   m_ready = false;
+  if (protocolMinor < 10 && Settings::value(Settings::Client::NativeKeyboard).toBool())
+    ipcSendToClient(QStringLiteral("nativeKeyboardMode"), QStringLiteral("unsupported"));
 
   // only 1.6 and later have a proxy: the clipboard, mouse wheel and key message formats
   // differ below that, and nothing older (synergy 1.4 and earlier) still needs supporting.
@@ -486,6 +494,9 @@ bool Client::setupComputer(int16_t protocolMinor)
     break;
   case 9:
     m_server = new ServerProxy1_9(this, m_stream, m_events);
+    break;
+  case 10:
+    m_server = new ServerProxy1_10(this, m_stream, m_events);
     break;
   default:
     break;

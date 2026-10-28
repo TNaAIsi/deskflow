@@ -20,6 +20,7 @@
 #include <QJsonDocument>
 #include <QMimeData>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QSet>
 #include <QStandardPaths>
@@ -83,6 +84,23 @@ QString availableName(const QString &directory, const QString &name)
   return {};
 }
 
+bool cacheEntryReferenced(const QString &directory, const QStringList &paths)
+{
+  const auto normalized = [](const QString &path) {
+    const QFileInfo info(path);
+    const auto canonical = info.canonicalFilePath();
+    return QDir::cleanPath(QDir::fromNativeSeparators(canonical.isEmpty() ? info.absoluteFilePath() : canonical));
+  };
+  const auto entry = normalized(directory);
+  for (const auto &path : paths) {
+    const auto reference = normalized(path);
+    if (entry.compare(reference, Qt::CaseInsensitive) == 0 || reference.startsWith(entry + '/', Qt::CaseInsensitive) ||
+        entry.startsWith(reference + '/', Qt::CaseInsensitive))
+      return true;
+  }
+  return false;
+}
+
 } // namespace filetransfer
 namespace {
 using filetransfer::kChunkBytes;
@@ -91,6 +109,281 @@ constexpr int kWindowChunks = 4;
 constexpr int kQueueMessages = 12;
 constexpr qint64 kTransferTimeoutMs = 120000;
 constexpr auto kClipboardMarker = "application/x-deskflow-file-transfer";
+constexpr int kMaximumHistoryRecords = 200;
+constexpr qsizetype kMaximumHistoryBytes = 4 * 1024 * 1024;
+constexpr qsizetype kMaximumCacheScanItems = 2000000;
+constexpr auto kManualCacheMarker = ".deskflow-preserve-manual-output";
+
+bool terminalState(const QString &state)
+{
+  return state == "complete" || state == "clipboardSkipped" || state == "cancelled" || state == "error" ||
+         state == "interrupted";
+}
+
+bool validCacheId(const QString &id)
+{
+  static const QRegularExpression expression(QStringLiteral("^[a-f0-9]{32}$"));
+  return expression.match(id).hasMatch();
+}
+
+QString historyKey(const QJsonObject &record)
+{
+  const QJsonArray identity{record.value("direction"), record.value("peer"), record.value("id")};
+  return QString::fromLatin1(
+      QCryptographicHash::hash(QJsonDocument(identity).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256)
+          .toHex()
+  );
+}
+
+QJsonArray sortedHistory(const QHash<QString, QJsonObject> &records)
+{
+  auto values = records.values();
+  std::sort(values.begin(), values.end(), [](const QJsonObject &first, const QJsonObject &second) {
+    if (first.value("updatedAt") == second.value("updatedAt"))
+      return first.value("historyKey").toString() < second.value("historyKey").toString();
+    return first.value("updatedAt").toInteger() > second.value("updatedAt").toInteger();
+  });
+  QJsonArray result;
+  for (const auto &value : values)
+    result.append(value);
+  return result;
+}
+
+struct FileHistoryStore : std::enable_shared_from_this<FileHistoryStore>
+{
+  explicit FileHistoryStore(const QString &file, const QString &cache) : filename(file), cacheRoot(cache)
+  {
+    writer.setMaxThreadCount(1);
+    cacheWorkers.setMaxThreadCount(1);
+    QFile source(filename);
+    if (source.open(QIODevice::ReadOnly) && source.size() <= kMaximumHistoryBytes) {
+      const auto document = QJsonDocument::fromJson(source.readAll()).object();
+      if (document.value("version").toInt() == 1) {
+        for (const auto &value : document.value("transfers").toArray()) {
+          auto record = value.toObject();
+          if (record.value("id").toString().isEmpty() || record.value("id").toString().size() > 128 ||
+              record.value("peer").toString().size() > 256 ||
+              (record.value("direction") != "send" && record.value("direction") != "receive"))
+            continue;
+          record["historyKey"] = historyKey(record);
+          if (!terminalState(record.value("state").toString())) {
+            record["state"] = "interrupted";
+            record["message"] = FileTransferService::tr("The previous session ended before this transfer completed.");
+          }
+          records.insert(record.value("historyKey").toString(), record);
+          if (records.size() == kMaximumHistoryRecords)
+            break;
+        }
+        for (const auto &value : document.value("protectedCacheEntries").toArray()) {
+          if (validCacheId(value.toString()))
+            manualCacheEntries.insert(value.toString());
+        }
+      }
+    }
+    cacheSnapshot = {{"path", cacheRoot},       {"bytes", 0},       {"files", 0},
+                     {"entries", QJsonArray{}}, {"complete", true}, {"clipboardAvailable", false}};
+  }
+
+  ~FileHistoryStore()
+  {
+    cancelled->store(true);
+    cacheWorkers.waitForDone();
+    save();
+    writer.waitForDone();
+  }
+
+  void save()
+  {
+    if (!dirty)
+      return;
+    auto history = sortedHistory(records);
+    QJsonArray protectedEntries;
+    for (const auto &id : manualCacheEntries)
+      protectedEntries.append(id);
+    QJsonObject object{{"version", 1}, {"transfers", history}, {"protectedCacheEntries", protectedEntries}};
+    auto bytes = QJsonDocument(object).toJson(QJsonDocument::Compact);
+    while (bytes.size() > kMaximumHistoryBytes && !history.isEmpty()) {
+      history.removeLast();
+      object["transfers"] = history;
+      bytes = QJsonDocument(object).toJson(QJsonDocument::Compact);
+    }
+    dirty = false;
+    const auto destination = filename;
+    const auto failed = writeFailed;
+    const std::weak_ptr<FileHistoryStore> weak(weak_from_this());
+    writer.start([destination, bytes, failed, weak] {
+      bool okay = QDir().mkpath(QFileInfo(destination).absolutePath());
+      QSaveFile file(destination);
+      file.setDirectWriteFallback(false);
+      okay = okay && file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit();
+      failed->store(!okay);
+      if (!okay) {
+        if (auto *application = QCoreApplication::instance())
+          QMetaObject::invokeMethod(
+              application,
+              [weak] {
+                if (const auto current = weak.lock())
+                  for (const auto &listener : current->listeners) {
+                    if (listener) {
+                      Q_EMIT listener->error(
+                          FileTransferService::tr(
+                              "Could not save file transfer history. Check available disk space and folder permissions."
+                          )
+                      );
+                      Q_EMIT listener->fileStateChanged();
+                    }
+                  }
+              },
+              Qt::QueuedConnection
+          );
+      }
+    });
+  }
+
+  QString filename;
+  QString cacheRoot;
+  QHash<QString, QJsonObject> records;
+  QSet<QString> manualCacheEntries;
+  QJsonObject cacheSnapshot;
+  ClipboardFiles clipboardSnapshot;
+  QList<QPointer<FileTransferService>> listeners;
+  QThreadPool writer;
+  QThreadPool cacheWorkers;
+  std::shared_ptr<std::atomic_bool> cancelled = std::make_shared<std::atomic_bool>(false);
+  std::shared_ptr<std::atomic_bool> writeFailed = std::make_shared<std::atomic_bool>(false);
+  bool dirty = false;
+  bool cacheScanning = false;
+  bool cacheMutating = false;
+  bool refreshPending = false;
+  bool inspectClipboardPending = false;
+};
+
+std::shared_ptr<FileHistoryStore> historyStore(const QString &filename, const QString &cacheRoot)
+{
+  // Every service is owned by the GUI thread. Offline configuration panels and
+  // the live service share one journal, so opening a panel cannot overwrite a
+  // newer transfer record with an older snapshot.
+  static QHash<QString, std::weak_ptr<FileHistoryStore>> stores;
+  if (const auto existing = stores.value(filename).lock())
+    return existing;
+  auto result = std::make_shared<FileHistoryStore>(filename, cacheRoot);
+  stores.insert(filename, result);
+  for (auto it = stores.begin(); it != stores.end();) {
+    if (it.value().expired())
+      it = stores.erase(it);
+    else
+      ++it;
+  }
+  return result;
+}
+
+ClipboardFiles cacheClipboard()
+{
+  auto *application = qobject_cast<QGuiApplication *>(QCoreApplication::instance());
+  if (!application)
+    return {0, {}, {}, true};
+  // Offscreen UI tests must never inspect the person's real clipboard. Native
+  // integration tests opt in only on disposable runners.
+  if ((QGuiApplication::platformName() == "offscreen" || QGuiApplication::platformName() == "minimal") &&
+      qEnvironmentVariable("DESKFLOW_NATIVE_CLIPBOARD_TESTS") != "1")
+    return {};
+  return nativeClipboardFiles();
+}
+
+QJsonObject scanCache(
+    const QString &root, const ClipboardFiles &clipboard, const QSet<QString> &manualEntries,
+    const QHash<QString, QString> &names, const std::shared_ptr<std::atomic_bool> &cancelled
+)
+{
+  QJsonArray entries;
+  qint64 totalBytes = 0;
+  qint64 totalFiles = 0;
+  qsizetype examined = 0;
+  bool complete = true;
+  const QFileInfo rootInfo(root);
+  if (rootInfo.isSymLink() || rootInfo.isJunction())
+    return {{"path", root},       {"bytes", 0},        {"files", 0},
+            {"entries", entries}, {"complete", false}, {"clipboardAvailable", clipboard.available},
+            {"unsafeRoot", true}};
+  QDirIterator folders(root, QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System);
+  while (folders.hasNext() && !cancelled->load()) {
+    folders.next();
+    const auto directory = folders.fileInfo();
+    if (!validCacheId(directory.fileName()) || directory.isSymLink() || directory.isJunction())
+      continue;
+    qint64 bytes = 0;
+    qint64 files = 0;
+    bool safe = true;
+    bool entryComplete = directory.isReadable();
+    complete = complete && entryComplete;
+    QStringList preview;
+    QStringList pending{directory.absoluteFilePath()};
+    while (!pending.isEmpty() && !cancelled->load() && entryComplete) {
+      const auto parent = pending.takeLast();
+      QDirIterator items(parent, QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System);
+      while (items.hasNext() && !cancelled->load()) {
+        items.next();
+        if (++examined > kMaximumCacheScanItems) {
+          complete = entryComplete = false;
+          break;
+        }
+        const auto info = items.fileInfo();
+        if (info.fileName() == QLatin1String(kManualCacheMarker) &&
+            info.dir().absolutePath() == directory.absoluteFilePath())
+          continue;
+        // Explicit recursion keeps directory junctions out of the traversal on
+        // Windows as well as ordinary symbolic links on every platform.
+        if (info.isSymLink() || info.isJunction()) {
+          safe = false;
+          continue;
+        }
+        if (info.isDir()) {
+          if (!info.isReadable()) {
+            complete = entryComplete = false;
+            break;
+          }
+          if (pending.size() >= 8192) {
+            complete = entryComplete = false;
+            break;
+          }
+          pending.append(info.absoluteFilePath());
+        } else if (info.isFile()) {
+          bytes += info.size();
+          ++files;
+        } else {
+          safe = false;
+        }
+        if (preview.size() < 3 && info.dir().absolutePath() == directory.absoluteFilePath())
+          preview.append(info.fileName());
+      }
+    }
+    const bool manual = manualEntries.contains(directory.fileName()) ||
+                        QFileInfo::exists(directory.absoluteFilePath() + '/' + QLatin1String(kManualCacheMarker));
+    const bool inUse =
+        !clipboard.available || filetransfer::cacheEntryReferenced(directory.absoluteFilePath(), clipboard.paths);
+    entries.append(
+        QJsonObject{
+            {"id", directory.fileName()},
+            {"cacheId", directory.fileName()},
+            {"name", names.value(directory.fileName(), preview.isEmpty() ? directory.fileName() : preview.join(", "))},
+            {"path", directory.absoluteFilePath()},
+            {"bytes", bytes},
+            {"files", files},
+            {"inUse", inUse || manual || !safe},
+            {"active", false},
+            {"manual", manual},
+            {"safe", safe},
+            {"complete", entryComplete}
+        }
+    );
+    totalBytes += bytes;
+    totalFiles += files;
+    if (!complete)
+      break;
+  }
+  return {{"path", root},       {"bytes", totalBytes},  {"files", totalFiles},
+          {"entries", entries}, {"complete", complete}, {"clipboardAvailable", clipboard.available}};
+}
 
 QString transferKey(const QString &peer, const QString &id)
 {
@@ -345,8 +638,23 @@ void dispatch(const QPointer<FileTransferService> &service, std::function<void(F
 class FileTransferService::Private
 {
 public:
-  explicit Private(FileTransferService *service) : q(service)
+  explicit Private(FileTransferService *service, const QString &storageDirectory) : q(service)
   {
+    const auto cacheRoot = storageDirectory.isEmpty()
+                               ? QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/file-clipboard"
+                               : QDir(storageDirectory).absoluteFilePath("file-clipboard");
+    const auto stateRoot = storageDirectory.isEmpty()
+                               ? QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)
+                               : QDir(storageDirectory).absolutePath();
+    store = historyStore(QDir(stateRoot).absoluteFilePath("file-transfers.json"), QDir(cacheRoot).absolutePath());
+    store->listeners.append(q);
+    instances().insert(this);
+    journalTimer = new QTimer(q);
+    journalTimer->setSingleShot(true);
+    journalTimer->setInterval(1000);
+    QObject::connect(journalTimer, &QTimer::timeout, q, [this] { store->save(); });
+    QObject::connect(q, &FileTransferService::progressChanged, q, [this](const QJsonObject &value) { record(value); });
+    QTimer::singleShot(0, q, [this] { refreshCache(false); });
     workers.setMaxThreadCount(6);
     timer = new QTimer(q);
     timer->setInterval(5);
@@ -361,13 +669,350 @@ public:
 
   ~Private()
   {
+    journalTimer->stop();
     for (const auto &scan : scans)
       scan->store(true);
-    for (const auto &item : sending)
+    const auto interrupted = [this](const std::shared_ptr<Transfer> &transfer, bool incoming) {
+      const auto key = historyKey(
+          QJsonObject{
+              {"direction", incoming ? "receive" : "send"}, {"peer", transfer->peer}, {"id", transfer->offer.id}
+          }
+      );
+      auto record = store->records.value(key);
+      if (record.isEmpty() || terminalState(record.value("state").toString()))
+        return;
+      record["state"] = "interrupted";
+      record["message"] = FileTransferService::tr("The previous session ended before this transfer completed.");
+      record["updatedAt"] = QDateTime::currentMSecsSinceEpoch();
+      record["completedAt"] = record.value("updatedAt");
+      store->records.insert(key, record);
+      store->dirty = true;
+    };
+    for (const auto &item : sending) {
       stop(item);
-    for (const auto &item : receiving)
+      interrupted(item, false);
+    }
+    for (const auto &item : receiving) {
       stop(item);
+      interrupted(item, true);
+    }
+    if (pendingPublication) {
+      stop(pendingPublication);
+      interrupted(pendingPublication, true);
+    }
     workers.waitForDone();
+    store->listeners.removeAll(q);
+    instances().remove(this);
+    store->save();
+    // Do not emit through the closing service: its owning widget may already
+    // have destroyed derived members. Other live inventory instances can safely
+    // observe the now-interrupted records from their shared store.
+    notify(store);
+  }
+
+  static QSet<Private *> &instances()
+  {
+    static QSet<Private *> value;
+    return value;
+  }
+
+  static void notify(const std::shared_ptr<FileHistoryStore> &store)
+  {
+    for (auto *instance : instances()) {
+      if (instance->store == store)
+        Q_EMIT instance->q->fileStateChanged();
+    }
+  }
+
+  bool activeJobs() const
+  {
+    for (const auto *instance : instances()) {
+      if (instance->store == store &&
+          (!instance->receiving.isEmpty() || !instance->sending.isEmpty() || !instance->scans.isEmpty() ||
+           instance->pendingPublication || instance->workers.activeThreadCount() != 0))
+        return true;
+    }
+    return false;
+  }
+
+  void record(const QJsonObject &progress)
+  {
+    if (progress.value("id").toString().isEmpty())
+      return;
+    const auto key = historyKey(progress);
+    auto record = store->records.value(key);
+    const auto now = QDateTime::currentMSecsSinceEpoch();
+    const bool firstUpdate = record.isEmpty();
+    if (firstUpdate) {
+      record["startedAt"] = now;
+      record["historyKey"] = key;
+    }
+    for (auto it = progress.begin(); it != progress.end(); ++it) {
+      if (it.key() != "localPaths")
+        record.insert(it.key(), it.value());
+    }
+    if (progress.contains("localPaths")) {
+      QJsonArray paths;
+      for (const auto &path : progress.value("localPaths").toArray()) {
+        if (paths.size() == 8)
+          break;
+        paths.append(path);
+      }
+      record["localPaths"] = paths;
+    }
+    record["updatedAt"] = now;
+    record["updatedAtIso"] = QDateTime::fromMSecsSinceEpoch(now).toUTC().toString(Qt::ISODateWithMs);
+    if (terminalState(record.value("state").toString()))
+      record["completedAt"] = now;
+    const auto cacheId = record.value("cacheId").toString();
+    if (!cacheId.isEmpty()) {
+      record["cached"] = QFileInfo::exists(store->cacheRoot + '/' + cacheId);
+      record["cacheState"] = record.value("cached").toBool() ? "available" : "removed";
+    } else {
+      record["cached"] = false;
+      record["cacheState"] = "external";
+    }
+    store->records.insert(key, record);
+    if (store->records.size() > kMaximumHistoryRecords) {
+      const auto ordered = sortedHistory(store->records);
+      for (qsizetype i = ordered.size() - 1; i >= 0 && store->records.size() > kMaximumHistoryRecords; --i) {
+        const auto candidate = ordered.at(i).toObject();
+        if (terminalState(candidate.value("state").toString()) || candidate.value("state") == "offered")
+          store->records.remove(candidate.value("historyKey").toString());
+      }
+    }
+    store->dirty = true;
+    if (firstUpdate || terminalState(record.value("state").toString()))
+      store->save();
+    else if (!journalTimer->isActive())
+      journalTimer->start();
+    notify(store);
+    if (terminalState(record.value("state").toString()))
+      refreshCache(false);
+  }
+
+  void refreshCache(bool inspectClipboard)
+  {
+    if (store->cacheScanning || store->cacheMutating) {
+      store->refreshPending = true;
+      store->inspectClipboardPending = store->inspectClipboardPending || inspectClipboard;
+      return;
+    }
+    auto snapshot = store->clipboardSnapshot;
+    // Background inventory does not inspect the clipboard. Explicit refresh,
+    // cleanup, and active clipboard synchronization may inspect native refs.
+    if (inspectClipboard || clipboardEnabled) {
+      snapshot = cacheClipboard();
+      updateCacheProtection(snapshot);
+    }
+    const auto root = store->cacheRoot;
+    const auto protectedEntries = store->manualCacheEntries;
+    QHash<QString, QString> names;
+    for (const auto &record : store->records) {
+      if (!record.value("cacheId").toString().isEmpty())
+        names.insert(record.value("cacheId").toString(), record.value("name").toString());
+    }
+    store->cacheScanning = true;
+    notify(store);
+    const auto cancellation = store->cancelled;
+    const std::weak_ptr<FileHistoryStore> weakStore(store);
+    store->cacheWorkers.start([root, snapshot, protectedEntries, names, cancellation, weakStore] {
+      const auto state = scanCache(root, snapshot, protectedEntries, names, cancellation);
+      if (cancellation->load())
+        return;
+      if (auto *application = QCoreApplication::instance()) {
+        QMetaObject::invokeMethod(
+            application,
+            [weakStore, state] {
+              const auto current = weakStore.lock();
+              if (!current)
+                return;
+              current->cacheSnapshot = state;
+              current->cacheScanning = false;
+              QSet<QString> present;
+              for (const auto &entry : state.value("entries").toArray())
+                present.insert(entry.toObject().value("id").toString());
+              for (auto it = current->records.begin(); it != current->records.end(); ++it) {
+                const auto id = it->value("cacheId").toString();
+                if (id.isEmpty())
+                  continue;
+                // A bounded scan can return partial inventory; never mark unseen
+                // entries removed until a complete traversal confirmed absence.
+                if (present.contains(id) || state.value("complete").toBool()) {
+                  (*it)["cached"] = present.contains(id);
+                  (*it)["cacheState"] = present.contains(id) ? "available" : "removed";
+                }
+              }
+              notify(current);
+              if (current->refreshPending) {
+                current->refreshPending = false;
+                const bool inspectClipboard = current->inspectClipboardPending;
+                current->inspectClipboardPending = false;
+                for (auto *instance : instances()) {
+                  if (instance->store == current) {
+                    instance->refreshCache(inspectClipboard);
+                    break;
+                  }
+                }
+              }
+            },
+            Qt::QueuedConnection
+        );
+      }
+    });
+  }
+
+  void updateCacheProtection(const ClipboardFiles &clipboard)
+  {
+    store->clipboardSnapshot = clipboard;
+    auto entries = store->cacheSnapshot.value("entries").toArray();
+    for (qsizetype i = 0; i < entries.size(); ++i) {
+      auto entry = entries.at(i).toObject();
+      entry["inUse"] = !clipboard.available || entry.value("manual").toBool() || !entry.value("safe").toBool() ||
+                       filetransfer::cacheEntryReferenced(entry.value("path").toString(), clipboard.paths);
+      entries[i] = entry;
+    }
+    store->cacheSnapshot["entries"] = entries;
+    store->cacheSnapshot["clipboardAvailable"] = clipboard.available;
+    notify(store);
+  }
+
+  bool protectManualDestination(const QString &destination)
+  {
+    const auto relative = QDir(store->cacheRoot).relativeFilePath(destination);
+    if (QDir::isAbsolutePath(relative) || relative == ".." || relative.startsWith("../"))
+      return true;
+    const auto first = relative.section('/', 0, 0);
+    if (validCacheId(first)) {
+      const auto directory = store->cacheRoot + '/' + first;
+      if (QFileInfo(directory).isSymLink() || QFileInfo(directory).isJunction())
+        return false;
+      if (QFileInfo(directory).isFile())
+        return true; // Only managed directories can ever be removed by cleanup.
+      if (!QDir().mkpath(directory))
+        return false;
+      QFile marker(directory + '/' + QLatin1String(kManualCacheMarker));
+      if (!QFileInfo::exists(marker.fileName()) && !marker.open(QIODevice::WriteOnly | QIODevice::NewOnly))
+        return false;
+      marker.close();
+      store->manualCacheEntries.insert(first);
+      store->dirty = true;
+      journalTimer->start();
+    }
+    return true;
+  }
+
+  void cleanCache(const QString &selected)
+  {
+    if (!selected.isEmpty() && !validCacheId(selected)) {
+      Q_EMIT q->error(FileTransferService::tr("Invalid cached transfer identifier."));
+      return;
+    }
+    if (activeJobs() || store->cacheMutating || store->cacheScanning) {
+      Q_EMIT q->error(
+          FileTransferService::tr("Wait for file transfers and cache statistics to finish before clearing the cache.")
+      );
+      return;
+    }
+    const auto snapshot = cacheClipboard();
+    if (!snapshot.available) {
+      Q_EMIT q->error(FileTransferService::tr("The clipboard is busy; retry clearing the cache."));
+      return;
+    }
+    updateCacheProtection(snapshot);
+    const auto root = store->cacheRoot;
+    if (QFileInfo(root).isSymLink() || QFileInfo(root).isJunction()) {
+      Q_EMIT q->error(FileTransferService::tr("The managed cache directory cannot be a symbolic link."));
+      return;
+    }
+    if (!selected.isEmpty() && (store->manualCacheEntries.contains(selected) ||
+                                filetransfer::cacheEntryReferenced(root + '/' + selected, snapshot.paths))) {
+      Q_EMIT q->error(
+          FileTransferService::tr(
+              "This cached transfer is still referenced by the clipboard or contains manually saved files."
+          )
+      );
+      return;
+    }
+    QHash<QString, QString> names;
+    for (const auto &record : store->records)
+      if (!record.value("cacheId").toString().isEmpty())
+        names.insert(record.value("cacheId").toString(), record.value("name").toString());
+    const auto protectedEntries = store->manualCacheEntries;
+    const auto cancellation = store->cancelled;
+    const QPointer<FileTransferService> weak(q);
+    const std::weak_ptr<FileHistoryStore> weakStore(store);
+    store->cacheMutating = true;
+    notify(store);
+    store->cacheWorkers.start([root, selected, snapshot, protectedEntries, names, cancellation, weak, weakStore] {
+      const auto inventory = scanCache(root, snapshot, protectedEntries, names, cancellation);
+      QStringList errors;
+      for (const auto &value : inventory.value("entries").toArray()) {
+        const auto entry = value.toObject();
+        if (cancellation->load())
+          return;
+        if ((!selected.isEmpty() && entry.value("id").toString() != selected) || entry.value("inUse").toBool())
+          continue;
+        if (!entry.value("complete").toBool() || !entry.value("safe").toBool()) {
+          errors.append(
+              FileTransferService::tr("A cache folder contains unsupported links or too many entries to remove safely.")
+          );
+          continue;
+        }
+        const auto path = entry.value("path").toString();
+        const auto current = QFileInfo(path);
+        if (current.isSymLink() || current.isJunction() ||
+            QDir::cleanPath(current.absolutePath()) != QDir::cleanPath(root)) {
+          errors.append(FileTransferService::tr("A cache folder changed while cleanup was running."));
+          continue;
+        }
+        if (!QDir(path).removeRecursively())
+          errors.append(
+              FileTransferService::tr("Could not remove a completed clipboard cache folder: %1").arg(current.fileName())
+          );
+      }
+      const auto state = scanCache(root, snapshot, protectedEntries, names, cancellation);
+      if (auto *application = QCoreApplication::instance()) {
+        QMetaObject::invokeMethod(
+            application,
+            [weakStore, state, weak, errors] {
+              const auto current = weakStore.lock();
+              if (!current)
+                return;
+              current->cacheMutating = false;
+              current->cacheSnapshot = state;
+              QSet<QString> present;
+              for (const auto &value : state.value("entries").toArray())
+                present.insert(value.toObject().value("id").toString());
+              for (auto it = current->records.begin(); it != current->records.end(); ++it) {
+                const auto id = it->value("cacheId").toString();
+                if (!id.isEmpty() && (present.contains(id) || state.value("complete").toBool())) {
+                  (*it)["cached"] = present.contains(id);
+                  (*it)["cacheState"] = present.contains(id) ? "available" : "removed";
+                }
+              }
+              current->dirty = true;
+              current->save();
+              notify(current);
+              if (weak)
+                for (const auto &error : errors)
+                  Q_EMIT weak->error(error);
+              if (current->refreshPending) {
+                current->refreshPending = false;
+                const bool inspectClipboard = current->inspectClipboardPending;
+                current->inspectClipboardPending = false;
+                for (auto *instance : instances()) {
+                  if (instance->store == current) {
+                    instance->refreshCache(inspectClipboard);
+                    break;
+                  }
+                }
+              }
+            },
+            Qt::QueuedConnection
+        );
+      }
+    });
   }
 
   bool
@@ -413,6 +1058,9 @@ public:
         {"state", state},
         {"direction", incoming ? "receive" : "send"}
     };
+    if (incoming && transfer->publishClipboard)
+      value.insert("cacheId", QFileInfo(transfer->destination).fileName());
+    value.insert("clipboard", transfer->offer.clipboard);
     if (!paths.isEmpty())
       value.insert("localPaths", QJsonArray::fromStringList(paths));
     if (!message.isEmpty())
@@ -575,6 +1223,13 @@ public:
 
   void startReceive(const Offer &offer, const QString &destination, bool publish)
   {
+    if (store->cacheMutating) {
+      QTimer::singleShot(100, q, [this, offer, destination, publish] {
+        if (!publish || (clipboardEnabled && latestRemoteClipboard == transferKey(offer.peer, offer.id)))
+          startReceive(offer, destination, publish);
+      });
+      return;
+    }
     const auto key = transferKey(offer.peer, offer.id);
     if (receiving.contains(key))
       return;
@@ -583,6 +1238,14 @@ public:
       return;
     }
     const auto folder = QDir(destination).absolutePath();
+    if (!publish && !protectManualDestination(folder)) {
+      Q_EMIT q->error(
+          FileTransferService::tr(
+              "Cannot protect a manual destination inside the managed cache. Choose another folder."
+          )
+      );
+      return;
+    }
     if (!QDir().mkpath(folder)) {
       Q_EMIT q->error("Cannot create destination folder: " + folder);
       return;
@@ -745,6 +1408,15 @@ public:
             self->receiving.remove(transfer->key);
             self->send(transfer->peer, "files.received", {{"id", transfer->offer.id}});
             transfer->completedPaths = paths;
+            if (!transfer->publishClipboard) {
+              for (const auto &path : paths)
+                if (!self->protectManualDestination(path))
+                  Q_EMIT service->error(
+                      FileTransferService::tr(
+                          "Move manually saved files out of the cache directory before cleaning it."
+                      )
+                  );
+            }
             if (transfer->publishClipboard && self->clipboardEnabled &&
                 nativeClipboardRevision() != self->nativeRevision)
               service->publishClipboardOffer();
@@ -900,6 +1572,8 @@ public:
   SendHandler sender;
   QTimer *timer = nullptr;
   QTimer *clipboardTimer = nullptr;
+  QTimer *journalTimer = nullptr;
+  std::shared_ptr<FileHistoryStore> store;
   quint64 nativeRevision = 0;
   quint64 publishedRevision = std::numeric_limits<quint64>::max();
   QClipboard *clipboard = nullptr;
@@ -919,7 +1593,9 @@ public:
   std::shared_ptr<std::atomic_bool> clipboardScan;
 };
 
-FileTransferService::FileTransferService(QObject *parent) : QObject(parent), d(std::make_unique<Private>(this))
+FileTransferService::FileTransferService(QObject *parent, const QString &storageDirectory)
+    : QObject(parent),
+      d(std::make_unique<Private>(this, storageDirectory))
 {
 }
 
@@ -993,6 +1669,7 @@ void FileTransferService::publishClipboardOffer(const QString &peer)
   const auto native = nativeClipboardFiles();
   QStringList paths;
   if (native.available) {
+    d->updateCacheProtection(native);
     d->nativeRevision = native.revision;
     if ((!native.generation.isEmpty() && !native.paths.isEmpty()) || native.revision == d->publishedRevision) {
       g_fileClipboardActive.store(true, std::memory_order_release);
@@ -1104,29 +1781,59 @@ void FileTransferService::cancel(const QString &id)
 
 void FileTransferService::clearClipboardCache()
 {
-  if (!d->receiving.isEmpty() || !d->sending.isEmpty() || !d->scans.isEmpty() || d->pendingPublication) {
-    Q_EMIT error(tr("Wait for file transfers to finish before clearing the clipboard cache."));
-    return;
+  d->cleanCache({});
+}
+
+void FileTransferService::removeClipboardCacheEntry(const QString &cacheId)
+{
+  d->cleanCache(cacheId);
+}
+
+void FileTransferService::clearTransferHistory()
+{
+  for (auto it = d->store->records.begin(); it != d->store->records.end();) {
+    if (terminalState(it->value("state").toString()))
+      it = d->store->records.erase(it);
+    else
+      ++it;
   }
-  const auto clipboard = nativeClipboardFiles();
-  if (!clipboard.available) {
-    Q_EMIT error(tr("The clipboard is busy; retry clearing the cache."));
-    return;
+  d->store->dirty = true;
+  d->store->save();
+  Private::notify(d->store);
+}
+
+void FileTransferService::refreshFileState()
+{
+  d->refreshCache(true);
+}
+
+QJsonArray FileTransferService::history() const
+{
+  return sortedHistory(d->store->records);
+}
+
+QJsonObject FileTransferService::cacheState() const
+{
+  auto result = d->store->cacheSnapshot;
+  const bool busy = d->activeJobs() || d->store->cacheMutating;
+  result["busy"] = busy;
+  result["scanning"] = d->store->cacheScanning;
+  result["mutating"] = d->store->cacheMutating;
+  result["historyWritable"] = !d->store->writeFailed->load();
+  auto entries = result.value("entries").toArray();
+  int protectedEntries = 0;
+  for (qsizetype i = 0; i < entries.size(); ++i) {
+    auto entry = entries.at(i).toObject();
+    entry["active"] = busy;
+    if (busy)
+      entry["inUse"] = true;
+    if (entry.value("inUse").toBool())
+      ++protectedEntries;
+    entries[i] = entry;
   }
-  QDir cache(QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/file-clipboard");
-  const auto directories = cache.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
-  for (const auto &directory : directories) {
-    if (directory.isSymLink() || directory.isJunction())
-      continue;
-    bool inUse = false;
-    for (const auto &path : clipboard.paths) {
-      const auto relative = QDir(directory.absoluteFilePath()).relativeFilePath(path);
-      if (!QDir::isAbsolutePath(relative) && relative != ".." && !relative.startsWith("../"))
-        inUse = true;
-    }
-    if (!inUse && !QDir(directory.absoluteFilePath()).removeRecursively())
-      Q_EMIT error(tr("Could not remove a completed clipboard cache folder: %1").arg(directory.fileName()));
-  }
+  result["entries"] = entries;
+  result["protectedEntries"] = protectedEntries;
+  return result;
 }
 
 void FileTransferService::receiveMessage(
@@ -1168,8 +1875,7 @@ void FileTransferService::receiveMessage(
       d->latestRemoteClipboard = key;
       if (offer.total <= d->automaticClipboardLimit) {
         const auto token = QCryptographicHash::hash(key.toUtf8(), QCryptographicHash::Sha256).toHex().left(32);
-        const auto cache = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/file-clipboard/" +
-                           QString::fromLatin1(token);
+        const auto cache = d->store->cacheRoot + '/' + QString::fromLatin1(token);
         d->startReceive(offer, cache, true);
       }
     }

@@ -22,6 +22,12 @@ private Q_SLOTS:
   void audio_rejectsDisabledOrUnsupportedConfiguration_data();
   void audio_rejectsDisabledOrUnsupportedConfiguration();
   void audio_malformedConfigurationDoesNotSignalReady();
+  void nativeKeyboardRequiresBothCapabilityAndReadyBackend();
+  void nativeKeyboardPreservesPhysicalPressReleaseAndLocalRepeat();
+  void nativeKeyboardCarriesInitialModifiersAndRespectsRemaps();
+  void nativeKeyboardFailureReleasesEverything();
+  void nativeKeyboardRejectsLegacyOrUnnegotiatedMessages();
+  void nativeKeyboardActionsDoNotReleasePhysicalModifiers();
 
 private:
   Log m_log;

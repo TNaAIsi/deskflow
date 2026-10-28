@@ -2,6 +2,13 @@
 # SPDX-License-Identifier: MIT
 
 create_test(
+  NAME PhysicalKeyTests
+  DEPENDS common
+  SOURCE PhysicalKeyTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/common"
+)
+
+create_test(
   NAME CapsLockInputSourcePolicyTests
   DEPENDS common
   SOURCE CapsLockInputSourcePolicyTests.cpp

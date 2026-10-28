@@ -219,6 +219,8 @@ void IpcServer::handleDisconnected()
   const auto clientSocket = qobject_cast<QLocalSocket *>(sender());
   LOG_DEBUG("%s ipc server client disconnected", m_typeName.constData());
   m_clients.remove(clientSocket);
+  m_readyClients.remove(clientSocket);
+  m_backgroundClients.remove(clientSocket);
   m_readBuffers.remove(clientSocket);
   clientSocket->deleteLater();
 }
@@ -233,6 +235,8 @@ void IpcServer::handleErrorOccurred()
   }
 
   m_clients.remove(clientSocket);
+  m_readyClients.remove(clientSocket);
+  m_backgroundClients.remove(clientSocket);
   m_readBuffers.remove(clientSocket);
   clientSocket->deleteLater();
 }
@@ -272,14 +276,30 @@ void IpcServer::processMessage(QLocalSocket *clientSocket, const QString &messag
 
     LOG_DEBUG("%s ipc server sending hello back", m_typeName.constData());
     writeToClientSocket(clientSocket, QStringLiteral("hello=%1").arg(versionId));
+    m_readyClients.insert(clientSocket);
+    const bool background = parts.value(2) == QStringLiteral("background");
+    if (background)
+      m_backgroundClients.insert(clientSocket);
+    else
+      m_backgroundClients.remove(clientSocket);
 
-    // Replay messages that were queued before any clients connected.
-    LOG_VERBOSE("ipc server replaying %d pending messages", m_pendingMessages.size());
-    for (const auto &pending : std::as_const(m_pendingMessages)) {
-      LOG_VERBOSE("%s ipc server replaying: %s", m_typeName.constData(), pending.toUtf8().constData());
-      writeToClientSocket(clientSocket, pending);
+    // Several observers can attach to the same core. In particular, the user
+    // resource provider often attaches before the status-bar observer. Every
+    // valid observer needs the current connection state, not just the first.
+    for (const auto &key :
+         {QStringLiteral("connectionState"), QStringLiteral("connectedClients"), QStringLiteral("secureSocket"),
+          QStringLiteral("nativeKeyboardMode")}) {
+      if (m_currentState.contains(key))
+        writeToClientSocket(clientSocket, m_currentState.value(key));
     }
-    m_pendingMessages.clear();
+
+    // Interactive events belong to a GUI observer. A background resource
+    // provider can attach first without consuming fingerprint/trust prompts.
+    if (!background) {
+      for (const auto &pending : std::as_const(m_pendingMessages))
+        writeToClientSocket(clientSocket, pending);
+      m_pendingMessages.clear();
+    }
   } else if (command == QStringLiteral("noop")) {
     LOG_DEBUG("%s ipc server got noop message", m_typeName.constData());
     writeToClientSocket(clientSocket, QStringLiteral("ok"));
@@ -293,13 +313,43 @@ void IpcServer::processMessage(QLocalSocket *clientSocket, const QString &messag
 void IpcServer::broadcastCommand(const QString &command, const QString &args)
 {
   const auto message = args.isEmpty() ? command : QStringLiteral("%1=%2").arg(command, args);
+  const bool currentState =
+      command == QStringLiteral("connectionState") || command == QStringLiteral("connectedClients") ||
+      command == QStringLiteral("secureSocket") || command == QStringLiteral("nativeKeyboardMode");
+  const bool clearNativeMode = command == QStringLiteral("connectionState") && args != QStringLiteral("Connected");
+  if (currentState && message.size() <= 64 * 1024) {
+    m_currentState.insert(command, message);
+    if (command == QStringLiteral("connectionState") && args != QStringLiteral("Connected")) {
+      m_currentState.remove(QStringLiteral("secureSocket"));
+      m_currentState.remove(QStringLiteral("connectedClients"));
+      m_currentState.insert(QStringLiteral("nativeKeyboardMode"), QStringLiteral("nativeKeyboardMode=unavailable"));
+    }
+  }
+  if (command == QStringLiteral("bye")) {
+    m_currentState.clear();
+    m_pendingMessages.clear();
+    // A client with an older binary is allowed to request shutdown during an
+    // upgrade. It needs the shutdown acknowledgement even though its hello
+    // version was intentionally rejected and it receives no state snapshots.
+    const auto clients = m_clients;
+    for (auto *client : clients) {
+      writeToClientSocket(client, message);
+      client->flush();
+    }
+    return;
+  }
 
-  if (m_clients.isEmpty()) {
+  const auto recipients = currentState ? m_readyClients : m_readyClients - m_backgroundClients;
+  if (recipients.isEmpty()) {
+    // State is retained independently above. Do not enqueue it a second time,
+    // and never deliver a stale shutdown request to a future observer.
+    if (currentState)
+      return;
     LOG_VERBOSE(
         "%s ipc server has no clients, message queued: %s", m_typeName.constData(), message.toUtf8().constData()
     );
-    // A GUI may be closed for hours while transfers continue. Retain the last
-    // snapshot per command rather than accumulating every progress update.
+    // Keep one pending notification per command for the first observer. These
+    // one-time events are separate from the persistent state replay above.
     const auto prefix = command + '=';
     for (qsizetype i = m_pendingMessages.size(); i > 0; --i)
       if (m_pendingMessages.at(i - 1).startsWith(prefix) || m_pendingMessages.at(i - 1) == command)
@@ -311,13 +361,15 @@ void IpcServer::broadcastCommand(const QString &command, const QString &args)
   }
 
   LOG_VERBOSE(
-      "%s ipc server broadcasting message to %d clients: %s", m_typeName.constData(), m_clients.size(),
+      "%s ipc server broadcasting message to %d clients: %s", m_typeName.constData(), recipients.size(),
       message.toUtf8().constData()
   );
-  for (auto *client : std::as_const(m_clients)) {
+  for (auto *client : recipients) {
     writeToClientSocket(client, message);
     client->flush();
   }
+  if (clearNativeMode)
+    broadcastCommand(QStringLiteral("nativeKeyboardMode"), QStringLiteral("unavailable"));
 }
 
 void IpcServer::writeToClientSocket(QLocalSocket *&clientSocket, const QString &message) const

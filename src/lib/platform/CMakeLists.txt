@@ -178,9 +178,15 @@ elseif(UNIX)
 endif()
 
 # wayland.h is included to check for wayland support
-add_library(platform STATIC ${PLATFORM_SOURCES})
+add_library(platform STATIC ${PLATFORM_SOURCES} NativeKeyboard.cpp PhysicalKeyboardCapture.cpp)
+if(APPLE)
+  target_sources(platform PRIVATE NativeKeyboardMac.cpp)
+endif()
 
 target_link_libraries(platform PUBLIC client ${libs})
+if(WIN32)
+  target_link_libraries(platform PRIVATE Shell32)
+endif()
 
 if(UNIX)
   target_link_libraries(platform PRIVATE net app)

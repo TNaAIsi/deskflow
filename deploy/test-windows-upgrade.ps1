@@ -236,7 +236,7 @@ function Assert-CandidateInstalled {
 try {
     $report.baseline = Get-PackageRecord $baselinePath
     $report.candidate = Get-PackageRecord $candidatePath
-    if ($report.baseline.version -notmatch '^1\.28\.0([.]|$)') { throw 'Baseline must be the released 1.28.0 MSI.' }
+    if ($report.baseline.version -notmatch '^1\.28\.[01]([.]|$)') { throw 'Baseline must be a previously shipped 1.28.x MSI.' }
     if ($report.baseline.product_code -eq $report.candidate.product_code -or
         $report.baseline.upgrade_code -ne $report.candidate.upgrade_code -or
         [version]$report.candidate.version -le [version]$report.baseline.version) {

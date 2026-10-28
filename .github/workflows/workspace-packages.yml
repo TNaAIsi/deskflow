@@ -38,8 +38,8 @@ jobs:
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           -DBUILD_TESTS=ON -DSKIP_BUILD_TESTS=ON
-          "-DDESKFLOW_VERSION_OVERRIDE=1.28.1"
-          "-DPACKAGE_VERSION_LABEL=1.28.1-workspace"
+          "-DDESKFLOW_VERSION_OVERRIDE=1.29.0"
+          "-DPACKAGE_VERSION_LABEL=1.29.0"
           -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
       - name: Compile
         run: cmake --build build --parallel 4
@@ -49,11 +49,15 @@ jobs:
         run: cpack --config build/CPackConfig.cmake -B build -D CPACK_DMG_DS_STORE_SETUP_SCRIPT=
       - name: Verify deployed application
         run: python3 deploy/verify-macos-bundle.py --find-in build/_CPack_Packages --output build/macos-bundle-validation.json
+      - name: Verify offline installer without driver activation
+        run: |
+          package=$(find build -maxdepth 1 -name 'deskflow-*-macos-arm64-full.pkg' -print -quit)
+          python3 deploy/verify-macos-installation.py --package "$package" --output build/macos-installation-validation.json
       - name: Include installation guide
         run: |
           cp docs/WorkspaceGuide.zh-CN.md build/使用说明.md
           python3 deploy/render-workspace-guide.py --output build/使用说明.html --images build/validation/ui --revision "$GITHUB_SHA"
-          shasum -a 256 build/deskflow-*.dmg > build/SHA256.txt
+          shasum -a 256 build/deskflow-*.dmg build/deskflow-*.pkg > build/SHA256.txt
       - name: Upload packages and validation
         if: always()
         uses: actions/upload-artifact@v4
@@ -61,10 +65,14 @@ jobs:
           name: deskflow-workspace-macos-arm64
           path: |
             build/deskflow-*.dmg
+            build/deskflow-*.pkg
+            build/native-keyboard-component.txt
             build/使用说明.md
             build/使用说明.html
             build/SHA256.txt
             build/macos-bundle-validation.json
+            build/macos-installation-validation.json
+            build/installed-macos-bundle-validation.json
             build/validation/ui/*.png
             build/src/unittests/Testing/Temporary/LastTest.log
           if-no-files-found: warn
@@ -92,8 +100,8 @@ jobs:
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           -DBUILD_TESTS=ON -DSKIP_BUILD_TESTS=ON
-          "-DDESKFLOW_VERSION_OVERRIDE=1.28.1"
-          "-DPACKAGE_VERSION_LABEL=1.28.1-workspace"
+          "-DDESKFLOW_VERSION_OVERRIDE=1.29.0"
+          "-DPACKAGE_VERSION_LABEL=1.29.0"
           ${{ steps.deps.outputs.vcpkg-cmake-config }}
       - name: Compile
         run: cmake --build build --parallel 4
@@ -131,7 +139,7 @@ jobs:
           $install = Start-Process msiexec.exe -ArgumentList @('/i', ('"' + $msi.FullName + '"'), '/qn', '/norestart', '/L*v', ('"' + $installLog + '"')) -Wait -PassThru
           if ($install.ExitCode -notin @(0, 3010)) { Get-Content $installLog -Tail 100; throw "MSI installation failed: $($install.ExitCode)" }
           $portable = Get-ChildItem build/deskflow-*-portable.zip | Select-Object -First 1
-          ./deploy/verify-windows-package.ps1 -ExpectedVersion 1.28.1 -Output build/windows-package-validation.json -PortableZip $portable.FullName
+          ./deploy/verify-windows-package.ps1 -ExpectedVersion 1.29.0 -Output build/windows-package-validation.json -PortableZip $portable.FullName
           $uninstall = Start-Process msiexec.exe -ArgumentList @('/x', ('"' + $msi.FullName + '"'), '/qn', '/norestart') -Wait -PassThru
           if ($uninstall.ExitCode -notin @(0, 3010)) { throw "MSI uninstall failed: $($uninstall.ExitCode)" }
       - name: Verify upgrade with existing legacy settings
@@ -141,7 +149,7 @@ jobs:
           $baseline = Get-ChildItem build/upgrade-baseline/deskflow-*.msi | Select-Object -First 1
           $candidate = Get-ChildItem build/deskflow-*.msi | Select-Object -First 1
           ./deploy/test-windows-upgrade.ps1 -BaselineMsi $baseline.FullName -CandidateMsi $candidate.FullName -Output build/windows-upgrade-validation.json
-          ./deploy/verify-windows-package.ps1 -ExpectedVersion 1.28.1 -Output build/windows-upgrade-runtime-validation.json
+          ./deploy/verify-windows-package.ps1 -ExpectedVersion 1.29.0 -Output build/windows-upgrade-runtime-validation.json
           $uninstall = Start-Process msiexec.exe -ArgumentList @('/x', ('"' + $candidate.FullName + '"'), '/qn', '/norestart') -Wait -PassThru
           if ($uninstall.ExitCode -notin @(0, 3010)) { throw "Upgraded MSI uninstall failed: $($uninstall.ExitCode)" }
       - name: Include installation guide

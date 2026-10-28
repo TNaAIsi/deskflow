@@ -50,6 +50,13 @@ public:
   {
     return false;
   }
+  virtual bool usesPhysicalKeyboard() const
+  {
+    return false;
+  }
+  virtual void setPhysicalKeyboardAllowed(bool)
+  {
+  }
 
   //@}
 

@@ -10,10 +10,13 @@ class EdgeSwitchPolicyTests : public QObject
   Q_OBJECT
 private Q_SLOTS:
   void inspectOnlyEnabledLocalOrigin();
-  void protectFullscreenOrConfinedCursor();
+  void protectOnlyFullscreenGameInput_data();
+  void protectOnlyFullscreenGameInput();
   void recognizeFullscreenOnNegativeMonitor();
   void ignoreWorkAreaAndPartialWindows();
   void rejectInvalidRectangles();
   void unrestrictedClipIsNotCapture();
   void recognizeClipToOneOfMultipleMonitors();
+  void cleanExplicitGamePrograms();
+  void limitExplicitGamePrograms();
 };
