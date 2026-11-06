@@ -213,6 +213,14 @@ p, li { white-space: pre-wrap; }
 <context>
     <name>ComputerSettingsDialog</name>
     <message>
+        <source>Modifier Keys (compatibility input)</source>
+        <translation>修饰键（兼容输入模式）</translation>
+    </message>
+    <message>
+        <source>These mappings apply only to compatibility input. A virtual HID keyboard sends modifier keys unchanged for the receiving computer to interpret.</source>
+        <translation>这些映射仅用于兼容输入模式。虚拟 HID 键盘原样发送修饰键，由接收端电脑解释。</translation>
+    </message>
+    <message>
         <source>Computer settings</source>
         <translation type="unfinished">计算机设置</translation>
     </message>

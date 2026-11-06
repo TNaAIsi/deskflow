@@ -38,8 +38,8 @@ jobs:
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           -DBUILD_TESTS=ON -DSKIP_BUILD_TESTS=ON
-          "-DDESKFLOW_VERSION_OVERRIDE=1.29.1"
-          "-DPACKAGE_VERSION_LABEL=1.29.1"
+          "-DDESKFLOW_VERSION_OVERRIDE=1.29.2"
+          "-DPACKAGE_VERSION_LABEL=1.29.2"
           "-DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)"
           -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
       - name: Compile
@@ -102,8 +102,8 @@ jobs:
         run: >
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           -DBUILD_TESTS=ON -DSKIP_BUILD_TESTS=ON
-          "-DDESKFLOW_VERSION_OVERRIDE=1.29.1"
-          "-DPACKAGE_VERSION_LABEL=1.29.1"
+          "-DDESKFLOW_VERSION_OVERRIDE=1.29.2"
+          "-DPACKAGE_VERSION_LABEL=1.29.2"
           ${{ steps.deps.outputs.vcpkg-cmake-config }}
       - name: Compile
         run: cmake --build build --parallel 4
@@ -141,7 +141,7 @@ jobs:
           $install = Start-Process msiexec.exe -ArgumentList @('/i', ('"' + $msi.FullName + '"'), '/qn', '/norestart', '/L*v', ('"' + $installLog + '"')) -Wait -PassThru
           if ($install.ExitCode -notin @(0, 3010)) { Get-Content $installLog -Tail 100; throw "MSI installation failed: $($install.ExitCode)" }
           $portable = Get-ChildItem build/deskflow-*-portable.zip | Select-Object -First 1
-          ./deploy/verify-windows-package.ps1 -ExpectedVersion 1.29.1 -Output build/windows-package-validation.json -PortableZip $portable.FullName
+          ./deploy/verify-windows-package.ps1 -ExpectedVersion 1.29.2 -Output build/windows-package-validation.json -PortableZip $portable.FullName
           $uninstall = Start-Process msiexec.exe -ArgumentList @('/x', ('"' + $msi.FullName + '"'), '/qn', '/norestart') -Wait -PassThru
           if ($uninstall.ExitCode -notin @(0, 3010)) { throw "MSI uninstall failed: $($uninstall.ExitCode)" }
       - name: Verify upgrade with existing legacy settings
@@ -151,7 +151,7 @@ jobs:
           $baseline = Get-ChildItem build/upgrade-baseline/deskflow-*.msi | Select-Object -First 1
           $candidate = Get-ChildItem build/deskflow-*.msi | Select-Object -First 1
           ./deploy/test-windows-upgrade.ps1 -BaselineMsi $baseline.FullName -CandidateMsi $candidate.FullName -Output build/windows-upgrade-validation.json
-          ./deploy/verify-windows-package.ps1 -ExpectedVersion 1.29.1 -Output build/windows-upgrade-runtime-validation.json
+          ./deploy/verify-windows-package.ps1 -ExpectedVersion 1.29.2 -Output build/windows-upgrade-runtime-validation.json
           $uninstall = Start-Process msiexec.exe -ArgumentList @('/x', ('"' + $candidate.FullName + '"'), '/qn', '/norestart') -Wait -PassThru
           if ($uninstall.ExitCode -notin @(0, 3010)) { throw "Upgraded MSI uninstall failed: $($uninstall.ExitCode)" }
       - name: Include installation guide

@@ -71,10 +71,6 @@ protected:
   {
     return m_stream;
   }
-  KeyID translatePhysicalModifier(KeyID id) const
-  {
-    return translateKey(id);
-  }
   void updateModifierTranslation(const OptionsList &options);
 
 private:

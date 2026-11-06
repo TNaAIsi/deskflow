@@ -8,6 +8,8 @@
 #include <QJsonArray>
 #include <QTest>
 
+#include <algorithm>
+
 using deskflow::workspace::DisplayTopology;
 
 namespace {
@@ -61,6 +63,7 @@ private Q_SLOTS:
   void snapshotRevisionTracksCommittedTopology();
   void missingPeerDoesNotDisableKnownRoutes();
   void providerLossPreservesModeButRevokesRemoteGeometry();
+  void offlinePlacementsDoNotPushNewPeersAway();
   void directionalSwitchesUseMonitorPlacement();
   void directionalSwitchesWalkLocalMonitorChain();
   void directionalSwitchesRespectGapsAndOfflinePeers();
@@ -329,6 +332,43 @@ void DisplayTopologyTests::providerLossPreservesModeButRevokesRemoteGeometry()
   classic["enabled"] = false;
   QVERIFY(topology.setLayout(classic, true));
   QVERIFY(!topology.routeMotion("Windows", {1910, 500}, {1930, 500}).handled);
+}
+
+void DisplayTopologyTests::offlinePlacementsDoNotPushNewPeersAway()
+{
+  auto &topology = DisplayTopology::instance();
+  topology.initialize("Offline placement test");
+  const auto ghost = display(
+      "Old endpoint", "old-monitor", rectangle(0, 0, 1920, 1080), rectangle(1000000, 0, 1920, 1080), false
+  );
+  QVERIFY(topology.setLayout({{"version", 1}, {"enabled", true}, {"displays", QJsonArray{ghost}}}, true));
+  double right = 0;
+  for (const auto &value : topology.layout().value("displays").toArray()) {
+    const auto object = value.toObject();
+    if (!object.value("connected").toBool())
+      continue;
+    const auto canvas = object.value("canvas").toObject();
+    right = std::max(right, canvas.value("x").toDouble() + canvas.value("width").toDouble());
+  }
+  const auto monitor = display(
+      "Fresh endpoint", "new-monitor", rectangle(0, 0, 1280, 800), rectangle(0, 0, 1280, 800)
+  );
+  topology.setPeerDisplays("Fresh endpoint", {monitor});
+  bool sawNew = false, keptOffline = false;
+  for (const auto &value : topology.layout().value("displays").toArray()) {
+    const auto object = value.toObject();
+    if (object.value("device") == "Fresh endpoint") {
+      sawNew = true;
+      QCOMPARE(object.value("canvas").toObject().value("x").toDouble(), right);
+    }
+    if (object.value("device") == "Old endpoint") {
+      keptOffline = true;
+      QVERIFY(!object.value("connected").toBool());
+      QCOMPARE(object.value("canvas"), ghost.value("canvas"));
+    }
+  }
+  QVERIFY(sawNew);
+  QVERIFY(keptOffline);
 }
 
 void DisplayTopologyTests::directionalSwitchesUseMonitorPlacement()

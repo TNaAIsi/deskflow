@@ -325,8 +325,19 @@ void DisplayTopology::publish()
 {
   QJsonArray result;
   QSet<QString> connected;
+  const auto collectConnected = [&connected](const QJsonArray &displays) {
+    for (const auto &value : displays) {
+      const auto display = value.toObject();
+      connected.insert(displayKey(display.value("device").toString(), display.value("id").toString()));
+    }
+  };
+  collectConnected(m_localDisplays);
+  for (const auto &displays : m_peerDisplays)
+    collectConnected(displays);
   double nextX = 0;
   for (auto it = m_placements.cbegin(); it != m_placements.cend(); ++it) {
+    if (!connected.contains(it.key()))
+      continue;
     const QRectF canvas = jsonRect(it.value().value("canvas").toObject());
     nextX = std::max(nextX, canvas.x() + canvas.width());
   }

@@ -5,6 +5,7 @@
 #pragma once
 
 #include <QDialog>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QWidget>
 
@@ -44,6 +45,7 @@ private:
   void edited();
 
   QJsonObject m_state;
+  QJsonArray m_offlineDisplays;
   QGraphicsScene *m_scene;
   QGraphicsView *m_view;
   QCheckBox *m_enabled;

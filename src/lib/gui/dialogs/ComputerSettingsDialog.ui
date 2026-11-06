@@ -91,7 +91,10 @@
        <item>
         <widget class="QGroupBox" name="groupModifers">
          <property name="title">
-          <string>Modifier Keys</string>
+          <string>Modifier Keys (compatibility input)</string>
+         </property>
+         <property name="toolTip">
+          <string>These mappings apply only to compatibility input. A virtual HID keyboard sends modifier keys unchanged for the receiving computer to interpret.</string>
          </property>
          <layout class="QFormLayout" name="formLayout_2">
           <item row="0" column="0">

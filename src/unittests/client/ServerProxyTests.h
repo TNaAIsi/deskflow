@@ -24,7 +24,7 @@ private Q_SLOTS:
   void audio_malformedConfigurationDoesNotSignalReady();
   void nativeKeyboardRequiresBothCapabilityAndReadyBackend();
   void nativeKeyboardPreservesPhysicalPressReleaseAndLocalRepeat();
-  void nativeKeyboardCarriesInitialModifiersAndRespectsRemaps();
+  void nativeKeyboardPreservesModifiersDespiteLegacyRemaps();
   void nativeKeyboardFailureReleasesEverything();
   void nativeKeyboardRejectsLegacyOrUnnegotiatedMessages();
   void nativeKeyboardActionsDoNotReleasePhysicalModifiers();

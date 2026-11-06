@@ -40,7 +40,6 @@ private:
   void receiveSyntheticKey();
   void physicalKey(deskflow::physicalkey::Usage usage, bool down);
   void holdKey(uint32_t source, deskflow::physicalkey::Usage target, bool down);
-  deskflow::physicalkey::Usage mapModifier(deskflow::physicalkey::Usage usage) const;
   void release();
   Backend m_backend;
   std::map<uint32_t, deskflow::physicalkey::Usage> m_pressed;

@@ -232,9 +232,16 @@ void DisplayLayoutWidget::loadItems()
 {
   m_loading = true;
   m_scene->clear();
+  m_offlineDisplays = {};
   QHash<QString, int> numbers;
   for (const auto &value : m_state.value("displays").toArray()) {
     const auto display = value.toObject();
+    // Keep reconnect placements in the draft without drawing or snapping to
+    // monitors that are no longer connected.
+    if (!display.value("connected").toBool(true)) {
+      m_offlineDisplays.append(display);
+      continue;
+    }
     const int number = ++numbers[display.value("device").toString()];
     m_scene->addItem(new DisplayItem(display, number, [this] {
       updateSelection();
@@ -251,7 +258,8 @@ void DisplayLayoutWidget::fitDisplays()
   if (!bounds.isEmpty()) {
     m_scene->setSceneRect(bounds.adjusted(-200, -200, 200, 200));
     m_view->fitInView(m_scene->sceneRect(), Qt::KeepAspectRatio);
-  }
+  } else
+    m_scene->setSceneRect(QRectF(-200, -200, 400, 400));
 }
 
 void DisplayLayoutWidget::updateSelection()
@@ -339,7 +347,7 @@ QJsonObject placements(const QJsonObject &state)
 
 QJsonObject DisplayLayoutWidget::layoutState() const
 {
-  QJsonArray array;
+  QJsonArray array = m_offlineDisplays;
   for (auto *item : m_scene->items())
     if (const auto *display = dynamic_cast<DisplayItem *>(item))
       array.append(display->display());

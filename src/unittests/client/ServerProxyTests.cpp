@@ -516,39 +516,43 @@ void ServerProxyTests::nativeKeyboardPreservesPhysicalPressReleaseAndLocalRepeat
   QVERIFY(keyboard.releases >= 2);
 }
 
-void ServerProxyTests::nativeKeyboardCarriesInitialModifiersAndRespectsRemaps()
+void ServerProxyTests::nativeKeyboardPreservesModifiersDespiteLegacyRemaps()
 {
   RecordingEventQueue events;
   FakeStream stream;
   FakeNativeKeyboard keyboard;
   TestNativeServerProxy proxy(undereferenceableClient(), &stream, &events, keyboard.backend(), true);
-  proxy.mapping({kOptionModifierMapForControl, kKeyModifierIDSuper});
+  proxy.mapping({
+      kOptionModifierMapForControl, kKeyModifierIDSuper,
+      kOptionModifierMapForSuper, kKeyModifierIDAlt,
+      kOptionModifierMapForAlt, kKeyModifierIDControl,
+      kOptionModifierMapForAltGr, kKeyModifierIDControl,
+      kOptionModifierMapForShift, kKeyModifierIDNull,
+      kOptionModifierMapForMeta, kKeyModifierIDShift
+  });
   pushNative(stream, kMsgNativeKeyboardCapability, 1);
   QVERIFY(proxy.capability());
   stream.takeWritten();
-  pushNative(stream, kMsgNativeKeyboardSession, 1, 1);
+  pushNative(stream, kMsgNativeKeyboardSession, 1, 0xff);
   QVERIFY(proxy.parse(kMsgNativeKeyboardSession));
-  QCOMPARE(keyboard.events.front(), std::make_tuple(uint16_t(7), uint16_t(0xe3), true));
-  // Both source Control and Win map to the same target GUI key. Releasing one
-  // source must not release the target while the other is still physically held.
-  pushNative(stream, kMsgNativePhysicalKey, 7, 0xe3, 1);
-  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
-  pushNative(stream, kMsgNativePhysicalKey, 7, 0xe0, 0);
-  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
-  QCOMPARE(keyboard.events.size(), size_t(1));
-  // A remap update while held does not change which key must be released.
-  proxy.mapping({kOptionModifierMapForSuper, kKeyModifierIDAlt});
-  pushNative(stream, kMsgNativePhysicalKey, 7, 0xe3, 0);
-  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
-  QCOMPARE(keyboard.events.size(), size_t(2));
-  QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), uint16_t(0xe3), false));
-  proxy.mapping({kOptionModifierMapForAltGr, kKeyModifierIDControl});
-  pushNative(stream, kMsgNativePhysicalKey, 7, 0xe6, 1);
-  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
-  QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), uint16_t(0xe4), true));
-  pushNative(stream, kMsgNativePhysicalKey, 7, 0xe6, 0);
-  QVERIFY(proxy.parse(kMsgNativePhysicalKey));
-  QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), uint16_t(0xe4), false));
+  QCOMPARE(keyboard.events.size(), size_t(8));
+  for (uint16_t bit = 0; bit < 8; ++bit) {
+    QCOMPARE(keyboard.events[bit], std::make_tuple(uint16_t(7), uint16_t(0xe0 + bit), true));
+    pushNative(stream, kMsgNativePhysicalKey, 7, 0xe0 + bit, 0);
+    QVERIFY(proxy.parse(kMsgNativePhysicalKey));
+    QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), uint16_t(0xe0 + bit), false));
+  }
+  keyboard.events.clear();
+  for (uint16_t usage = 0xe0; usage <= 0xe7; ++usage) {
+    pushNative(stream, kMsgNativePhysicalKey, 7, usage, 1);
+    QVERIFY(proxy.parse(kMsgNativePhysicalKey));
+    QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), usage, true));
+    proxy.mapping({kOptionModifierMapForControl, kKeyModifierIDNull});
+    pushNative(stream, kMsgNativePhysicalKey, 7, usage, 0);
+    QVERIFY(proxy.parse(kMsgNativePhysicalKey));
+    QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), usage, false));
+  }
+  QCOMPARE(keyboard.events.size(), size_t(16));
 }
 
 void ServerProxyTests::nativeKeyboardFailureReleasesEverything()
@@ -611,18 +615,18 @@ void ServerProxyTests::nativeKeyboardActionsDoNotReleasePhysicalModifiers()
   pushNative(stream, kMsgNativeSyntheticKey, uint32_t('c'), KeyModifierControl, 0);
   QVERIFY(proxy.parse(kMsgNativeSyntheticKey));
   QCOMPARE(keyboard.events.size(), size_t(3));
-  QCOMPARE(keyboard.events[0], std::make_tuple(uint16_t(7), uint16_t(0xe3), true));
+  QCOMPARE(keyboard.events[0], std::make_tuple(uint16_t(7), uint16_t(0xe0), true));
   QCOMPARE(keyboard.events[1], std::make_tuple(uint16_t(7), uint16_t(6), true));
   QCOMPARE(keyboard.events[2], std::make_tuple(uint16_t(7), uint16_t(6), false));
   pushNative(stream, kMsgNativePhysicalKey, 7, 0xe0, 0);
   QVERIFY(proxy.parse(kMsgNativePhysicalKey));
-  QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), uint16_t(0xe3), false));
+  QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), uint16_t(0xe0), false));
   pushNative(stream, kMsgNativeSyntheticKey, kKeySetModifiers, KeyModifierControl, 1);
   QVERIFY(proxy.parse(kMsgNativeSyntheticKey));
   pushNative(stream, kMsgNativeSyntheticKey, kKeyClearModifiers, KeyModifierControl, 1);
   QVERIFY(proxy.parse(kMsgNativeSyntheticKey));
-  QCOMPARE(keyboard.events[keyboard.events.size() - 2], std::make_tuple(uint16_t(7), uint16_t(0xe3), true));
-  QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), uint16_t(0xe3), false));
+  QCOMPARE(keyboard.events[keyboard.events.size() - 2], std::make_tuple(uint16_t(7), uint16_t(0xe0), true));
+  QCOMPARE(keyboard.events.back(), std::make_tuple(uint16_t(7), uint16_t(0xe0), false));
 }
 
 QTEST_MAIN(ServerProxyTests)

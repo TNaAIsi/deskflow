@@ -226,6 +226,92 @@ private Q_SLOTS:
     QVERIFY(!editor(dialog)->isModified());
   }
 
+  void offlineDisplaysStayOutOfCanvas_data()
+  {
+    QTest::addColumn<bool>("renamed");
+    QTest::newRow("disconnected") << false;
+    QTest::newRow("reconnected-with-a-new-name") << true;
+  }
+
+  void offlineDisplaysStayOutOfCanvas()
+  {
+    QFETCH(bool, renamed);
+    ServerConfig config;
+    ServerConfigDialog dialog(nullptr, config);
+    auto updated = state(true);
+    auto topology = updated.value("topology").toObject();
+    auto displays = topology.value("displays").toArray();
+    auto offline = displays.at(1).toObject();
+    offline["connected"] = false;
+    auto position = offline.value("canvas").toObject();
+    position["x"] = 100000;
+    offline["canvas"] = position;
+    displays[1] = offline;
+    if (renamed) {
+      auto current = state(true).value("topology").toObject().value("displays").toArray().at(1).toObject();
+      current["device"] = "New Mac name";
+      displays.append(current);
+    }
+    topology["displays"] = displays;
+    updated["topology"] = topology;
+    dialog.setLayoutState(updated);
+    auto *scene = editor(dialog)->findChild<QGraphicsScene *>();
+    int monitors = 0;
+    for (auto *item : scene->items())
+      if (dynamic_cast<QGraphicsRectItem *>(item))
+        ++monitors;
+    QCOMPARE(monitors, renamed ? 2 : 1);
+    QVERIFY(scene->itemsBoundingRect().right() < 100000);
+    QVERIFY(!editor(dialog)->isModified());
+    QCOMPARE(editor(dialog)->layoutState().value("displays").toArray().size(), displays.size());
+
+    moveFirstDisplay(dialog, -120);
+    buttons(dialog)->button(QDialogButtonBox::Save)->click();
+    const auto saved = QJsonDocument::fromJson(Settings::value(Settings::Workspace::Layout).toString().toUtf8()).object();
+    QCOMPARE(canvasX(saved, "Mac"), 100000.0);
+    QCOMPARE(saved.value("displays").toArray().size(), displays.size());
+  }
+
+  void disconnectedDisplayRetainsDraftUntilReconnection()
+  {
+    ServerConfig config;
+    ServerConfigDialog dialog(nullptr, config);
+    dialog.setLayoutState(state(true));
+    auto *scene = editor(dialog)->findChild<QGraphicsScene *>();
+    for (auto *item : scene->items()) {
+      if (dynamic_cast<QGraphicsRectItem *>(item) && item->pos().x() == 1920) {
+        scene->clearSelection();
+        item->setSelected(true);
+        break;
+      }
+    }
+    editor(dialog)->findChild<QDoubleSpinBox *>("displayCanvasX")->setValue(2200);
+    auto offline = state(true);
+    auto topology = offline.value("topology").toObject();
+    auto displays = topology.value("displays").toArray();
+    auto mac = displays.at(1).toObject();
+    mac["connected"] = false;
+    displays[1] = mac;
+    topology["displays"] = displays;
+    offline["topology"] = topology;
+    dialog.setLayoutState(offline);
+    QCOMPARE(canvasX(editor(dialog)->layoutState(), "Mac"), 2200.0);
+    QVERIFY(editor(dialog)->isModified());
+    int monitors = 0;
+    for (auto *item : scene->items())
+      if (dynamic_cast<QGraphicsRectItem *>(item))
+        ++monitors;
+    QCOMPARE(monitors, 1);
+    dialog.setLayoutState(state(true));
+    QCOMPARE(canvasX(editor(dialog)->layoutState(), "Mac"), 2200.0);
+    monitors = 0;
+    for (auto *item : scene->items())
+      if (dynamic_cast<QGraphicsRectItem *>(item))
+        ++monitors;
+    QCOMPARE(monitors, 2);
+    QVERIFY(editor(dialog)->isModified());
+  }
+
   void overlappingLayoutStaysOpenAndDoesNotCommit()
   {
     ServerConfig config;

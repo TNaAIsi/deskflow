@@ -146,46 +146,11 @@ void ServerProxy1_10::receiveSession()
   }
 }
 
-deskflow::physicalkey::Usage ServerProxy1_10::mapModifier(deskflow::physicalkey::Usage usage) const
-{
-  if (usage.page != 0x07 || usage.id < 0xe0 || usage.id > 0xe7)
-    return usage;
-  const KeyID keys[]{kKeyControl_L, kKeyShift_L, kKeyAlt_L, kKeySuper_L,
-                     kKeyControl_R, kKeyShift_R, kKeyAlt_R, kKeySuper_R};
-  auto translated = translatePhysicalModifier(keys[usage.id - 0xe0]);
-  if (usage.id == 0xe6) {
-    const auto altGr = translatePhysicalModifier(kKeyAltGr);
-    if (altGr != kKeyAltGr)
-      translated = altGr;
-  }
-  switch (translated) {
-  case kKeyControl_L:
-    return {0x07, 0xe0};
-  case kKeyShift_L:
-    return {0x07, 0xe1};
-  case kKeyAlt_L:
-    return {0x07, 0xe2};
-  case kKeyMeta_L:
-  case kKeySuper_L:
-    return {0x07, 0xe3};
-  case kKeyControl_R:
-    return {0x07, 0xe4};
-  case kKeyShift_R:
-    return {0x07, 0xe5};
-  case kKeyAlt_R:
-  case kKeyAltGr:
-    return {0x07, 0xe6};
-  case kKeyMeta_R:
-  case kKeySuper_R:
-    return {0x07, 0xe7};
-  default:
-    return {}; // User explicitly disabled this modifier.
-  }
-}
-
 void ServerProxy1_10::physicalKey(deskflow::physicalkey::Usage usage, bool down)
 {
-  holdKey(deskflow::physicalkey::encode(usage), mapModifier(usage), down);
+  // The receiving OS owns modifier interpretation for the virtual device.
+  // Legacy server remaps must not transform or disable physical HID usages.
+  holdKey(deskflow::physicalkey::encode(usage), usage, down);
 }
 
 void ServerProxy1_10::holdKey(uint32_t source, deskflow::physicalkey::Usage target, bool down)
@@ -232,7 +197,7 @@ void ServerProxy1_10::receiveSyntheticKey()
       for (uint32_t bit = 0; bit < 6; ++bit)
         if ((mask & (1u << bit)) != 0)
           holdKey(
-              0x80000000u + bit, deskflow::physicalkey::modifierUsage(translatePhysicalModifier(modifierKeys[bit])),
+              0x80000000u + bit, deskflow::physicalkey::modifierUsage(modifierKeys[bit]),
               key == kKeySetModifiers
           );
       return;
@@ -252,14 +217,11 @@ void ServerProxy1_10::receiveSyntheticKey()
         if ((mask & (1u << bit)) != 0) {
           const auto source = base + 1 + bit;
           sources.push_back(source);
-          holdKey(source, deskflow::physicalkey::modifierUsage(translatePhysicalModifier(modifierKeys[bit])), true);
+          holdKey(source, deskflow::physicalkey::modifierUsage(modifierKeys[bit]), true);
         }
       }
-      const auto main = deskflow::physicalkey::modifierUsage(key)
-                            ? deskflow::physicalkey::modifierUsage(translatePhysicalModifier(key))
-                            : action.usage;
       sources.push_back(base);
-      holdKey(base, main, true);
+      holdKey(base, action.usage, true);
     } else {
       const auto group = m_syntheticGroups.find(key);
       if (group == m_syntheticGroups.end())
