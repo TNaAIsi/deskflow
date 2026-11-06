@@ -233,8 +233,7 @@ void *OSXComputer::getEventTarget() const
 
 bool OSXComputer::getClipboard(ClipboardID, IClipboard *dst) const
 {
-  Clipboard::copy(dst, &m_pasteboard);
-  return true;
+  return Clipboard::copy(dst, &m_pasteboard);
 }
 
 void OSXComputer::getShape(int32_t &x, int32_t &y, int32_t &w, int32_t &h) const
@@ -695,7 +694,7 @@ void OSXComputer::hideCursor()
 void OSXComputer::enable()
 {
   // watch the clipboard
-  m_clipboardTimer = m_events->newTimer(1.0, nullptr);
+  m_clipboardTimer = m_events->newTimer(0.15, nullptr);
   m_events->addHandler(EventTypes::Timer, m_clipboardTimer, [this](const auto &) { checkClipboards(); });
 
   m_axTimer = m_events->newTimer(1.0, nullptr);
@@ -842,7 +841,7 @@ bool OSXComputer::setClipboard(ClipboardID, const IClipboard *src)
 {
   if (src != nullptr) {
     LOG_DEBUG("setting clipboard");
-    Clipboard::copy(&m_pasteboard, src);
+    return Clipboard::copy(&m_pasteboard, src);
   }
   return true;
 }

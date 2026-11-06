@@ -662,7 +662,7 @@ public:
     clipboardTimer = new QTimer(q);
     clipboardTimer->setInterval(150);
     QObject::connect(clipboardTimer, &QTimer::timeout, q, [this] {
-      if (clipboardEnabled && clipboard && nativeClipboardRevision() != nativeRevision)
+      if (clipboardEnabled && clipboard && (!nativeRevisionObserved || nativeClipboardRevision() != nativeRevision))
         q->publishClipboardOffer();
     });
   }
@@ -1575,6 +1575,7 @@ public:
   QTimer *journalTimer = nullptr;
   std::shared_ptr<FileHistoryStore> store;
   quint64 nativeRevision = 0;
+  bool nativeRevisionObserved = false;
   quint64 publishedRevision = std::numeric_limits<quint64>::max();
   QClipboard *clipboard = nullptr;
   QMetaObject::Connection clipboardConnection;
@@ -1617,6 +1618,7 @@ void FileTransferService::setClipboardEnabled(bool enabled)
   g_fileClipboardEnabled.store(enabled, std::memory_order_release);
   if (!enabled) {
     g_fileClipboardActive.store(false, std::memory_order_release);
+    d->nativeRevisionObserved = false;
     ++d->clipboardEpoch;
     if (d->clipboardScan)
       d->clipboardScan->store(true);
@@ -1670,12 +1672,29 @@ void FileTransferService::publishClipboardOffer(const QString &peer)
   QStringList paths;
   if (native.available) {
     d->updateCacheProtection(native);
+    const bool changed = !d->nativeRevisionObserved || native.revision != d->nativeRevision;
     d->nativeRevision = native.revision;
+    d->nativeRevisionObserved = true;
     if ((!native.generation.isEmpty() && !native.paths.isEmpty()) || native.revision == d->publishedRevision) {
       g_fileClipboardActive.store(true, std::memory_order_release);
       return;
     }
+    // Qt may deliver dataChanged after the native revision poll has already
+    // handled this copy. It must not expire offers or cancel an incoming file
+    // transfer. An explicit peer connection may still need the current offer.
+    if (!changed && peer.isEmpty())
+      return;
     paths = native.paths;
+    if (!changed) {
+      if (!paths.isEmpty()) {
+        const auto offer = d->localOffers.constFind(d->clipboardOffer);
+        if (offer != d->localOffers.cend() && (offer->peer.isEmpty() || offer->peer == peer))
+          d->send(peer, "files.offer", offer->metadata);
+        else
+          d->queueOffer(paths, peer, true);
+      }
+      return;
+    }
   } else {
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     return; // Clipboard was locked or changed while being read; retry next poll.
@@ -1868,6 +1887,16 @@ void FileTransferService::receiveMessage(
     summary.insert("state", "offered");
     Q_EMIT offerAvailable(summary);
     if (offer.clipboard && d->clipboardEnabled) {
+      // Establish the local baseline before accepting the remote copy. A
+      // pending notification for an older local copy is not a newer user copy.
+      if (!d->nativeRevisionObserved || nativeClipboardRevision() != d->nativeRevision) {
+        const auto native = nativeClipboardFiles();
+        if (native.available) {
+          d->updateCacheProtection(native);
+          d->nativeRevision = native.revision;
+          d->nativeRevisionObserved = true;
+        }
+      }
       for (const auto &old : d->receiving.keys()) {
         if (old != key && d->receiving.value(old)->publishClipboard)
           d->fail(old, "Superseded by a newer file clipboard");

@@ -8,6 +8,15 @@ foreach(test FrameCodecTests AudioServiceTests FileTransferServiceTests FileTran
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/workspace"
   )
 endforeach()
+if(WIN32 OR APPLE)
+  create_test(
+    NAME FileClipboardSyncTests
+    DEPENDS workspace
+    SOURCE FileClipboardSyncTests.cpp
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/workspace"
+  )
+  set_tests_properties(FileClipboardSyncTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()
 foreach(test NativeClipboardFilesTests FileClipboardIntegrationTests)
   create_test(
     NAME ${test}

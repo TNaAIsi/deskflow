@@ -19,7 +19,7 @@
 // OSXClipboard
 //
 
-OSXClipboard::OSXClipboard() : m_time(0), m_pboard(nullptr)
+OSXClipboard::OSXClipboard(CFStringRef pasteboardName) : m_time(0), m_pboard(nullptr)
 {
   m_converters.push_back(new OSXClipboardHTMLConverter);
   m_converters.push_back(new OSXClipboardBMPConverter);
@@ -27,7 +27,7 @@ OSXClipboard::OSXClipboard() : m_time(0), m_pboard(nullptr)
   m_converters.push_back(new OSXClipboardUTF16Converter);
   m_converters.push_back(new OSXClipboardTextConverter);
 
-  OSStatus createErr = PasteboardCreate(kPasteboardClipboard, &m_pboard);
+  OSStatus createErr = PasteboardCreate(pasteboardName, &m_pboard);
   if (createErr != noErr) {
     LOG_WARN("failed to create clipboard reference: error %i", createErr);
     LOG_ERR("unable to connect to pasteboard, clipboard sharing disabled", createErr);
@@ -35,15 +35,15 @@ OSXClipboard::OSXClipboard() : m_time(0), m_pboard(nullptr)
     return;
   }
 
-  OSStatus syncErr = PasteboardSynchronize(m_pboard);
-  if (syncErr != noErr) {
-    LOG_WARN("failed to syncronize clipboard: error %i", syncErr);
-  }
+  // The result is a set of flags, not an OSStatus error code.
+  PasteboardSynchronize(m_pboard);
 }
 
 OSXClipboard::~OSXClipboard()
 {
   clearConverters();
+  if (m_pboard != nullptr)
+    CFRelease(m_pboard);
 }
 
 bool OSXClipboard::empty()
@@ -58,6 +58,7 @@ bool OSXClipboard::empty()
     return false;
   }
 
+  m_pendingClipboardChange = false;
   return true;
 }
 
@@ -69,10 +70,9 @@ bool OSXClipboard::synchronize()
   PasteboardSyncFlags flags = PasteboardSynchronize(m_pboard);
   LOG_VERBOSE("flags: %x", flags);
 
-  if (flags & kPasteboardModified) {
-    return true;
-  }
-  return false;
+  const bool changed = m_pendingClipboardChange || (flags & kPasteboardModified);
+  m_pendingClipboardChange = false;
+  return changed;
 }
 
 void OSXClipboard::add(Format format, const std::string &data)
@@ -116,6 +116,10 @@ bool OSXClipboard::open(Time time) const
     return false;
 
   LOG_DEBUG("opening clipboard");
+  // Carbon caches the pasteboard per reference. A copy can arrive after the
+  // last poll but before a screen switch or clipboard request. Refresh before
+  // reading, and retain its notification for checkClipboards() to announce.
+  m_pendingClipboardChange |= (PasteboardSynchronize(m_pboard) & kPasteboardModified) != 0;
   m_time = time;
   return true;
 }
@@ -136,8 +140,9 @@ bool OSXClipboard::has(Format format) const
   if (m_pboard == nullptr)
     return false;
 
-  PasteboardItemID item;
-  PasteboardGetItemIdentifier(m_pboard, (CFIndex)1, &item);
+  PasteboardItemID item = nullptr;
+  if (PasteboardGetItemIdentifier(m_pboard, (CFIndex)1, &item) != noErr)
+    return false;
 
   for (ConverterList::const_iterator index = m_converters.begin(); index != m_converters.end(); ++index) {
     IOSXClipboardConverter *converter = *index;
@@ -159,13 +164,14 @@ bool OSXClipboard::has(Format format) const
 std::string OSXClipboard::get(Format format) const
 {
   CFStringRef type;
-  PasteboardItemID item;
+  PasteboardItemID item = nullptr;
   std::string result;
 
   if (m_pboard == nullptr)
     return result;
 
-  PasteboardGetItemIdentifier(m_pboard, (CFIndex)1, &item);
+  if (PasteboardGetItemIdentifier(m_pboard, (CFIndex)1, &item) != noErr)
+    return result;
 
   // find the converter for the first clipboard format we can handle
   IOSXClipboardConverter *converter = nullptr;
@@ -212,9 +218,6 @@ std::string OSXClipboard::get(Format format) const
 
 void OSXClipboard::clearConverters()
 {
-  if (m_pboard == nullptr)
-    return;
-
   for (ConverterList::iterator index = m_converters.begin(); index != m_converters.end(); ++index) {
     delete *index;
   }

@@ -44,7 +44,7 @@ jobs:
       - name: Compile
         run: cmake --build build --parallel 4
       - name: Test without desktop input injection
-        run: ctest --test-dir build/src/unittests --output-on-failure -E "^(MSWindowsClipboardTests|OSXKeyStateTests|OSXClipboardTests)$"
+        run: ctest --test-dir build/src/unittests --output-on-failure -E "^(MSWindowsClipboardTests|OSXKeyStateTests)$"
       - name: Package
         run: cpack --config build/CPackConfig.cmake -B build -D CPACK_DMG_DS_STORE_SETUP_SCRIPT=
       - name: Verify deployed application
@@ -120,7 +120,7 @@ jobs:
             }
           }
       - name: Test without desktop input injection
-        run: ctest --test-dir build/src/unittests --output-on-failure -E "^(MSWindowsClipboardTests|OSXKeyStateTests|OSXClipboardTests)$"
+        run: ctest --test-dir build/src/unittests --output-on-failure -E "^(MSWindowsClipboardTests|OSXKeyStateTests)$"
       - name: Build installers
         run: cmake --build build --target package --parallel 4
       - name: Download previous installer for upgrade regression
