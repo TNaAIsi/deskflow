@@ -31,7 +31,7 @@ runs:
       if: ${{ runner.os != 'Windows' }}
       run: |
           if [ "$RUNNER_OS" == "macOS" ]; then
-            brew install openssl --quiet
+            brew install openssl@3 --quiet
           elif [ "$RUNNER_OS" == "Linux" ]; then
             if [ ${{inputs.like}} == "debian" ]; then
               apt update -qqq > /dev/null
@@ -84,7 +84,8 @@ runs:
         extra-args: --classic --host-triplet=${{inputs.vcpkg-triplet}}
         triplet: ${{inputs.vcpkg-triplet}}
         token: ${{ github.token }}
-        revision: master
+        # OpenSSL 3.6.5#2, used by the verified 1.29.0 installers.
+        revision: 866e9e258a76437074a5cf02d4c2d71b53bff2f8
 
     - name: Install Wix
       if: ${{ runner.os == 'Windows' }}
