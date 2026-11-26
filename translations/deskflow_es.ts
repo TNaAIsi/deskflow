@@ -209,6 +209,10 @@ p, li { white-space: pre-wrap; }
         <source>Files and cache</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Clear Server History</source>
+        <translation>Borrar historial de servidores</translation>
+    </message>
 </context>
 <context>
     <name>ComputerSettingsDialog</name>

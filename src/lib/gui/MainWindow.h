@@ -182,7 +182,7 @@ private:
   VersionChecker m_versionChecker;
   bool m_secureSocket = false;
   bool m_saveOnExit = true;
-  bool m_clientErrorVisible = false;
+  bool m_alreadyConnectedShown = false;
   ServerConfig m_serverConfig;
   deskflow::gui::CoreProcess m_coreProcess;
   QSet<QString> m_ignoredClients;

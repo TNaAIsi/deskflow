@@ -45,6 +45,7 @@ public:
     inline static const auto CapsLockInputSource = QStringLiteral("client/capsLockInputSource");
     inline static const auto NativeKeyboard = QStringLiteral("client/nativeKeyboard");
     inline static const auto RemoteHost = QStringLiteral("client/remoteHost");
+    inline static const auto RecentRemoteHosts = QStringLiteral("client/recentRemoteHosts");
     inline static const auto XdpClipboardRetried = QStringLiteral("client/xdpClipboardRetried");
     inline static const auto XdpRestoreToken = QStringLiteral("client/xdpRestoreToken");
   };
@@ -293,6 +294,7 @@ private:
     , Client::CapsLockInputSource
     , Client::NativeKeyboard
     , Client::RemoteHost
+    , Client::RecentRemoteHosts
     , Client::YScrollScale
     , Client::XScrollScale
     , Core::CoreMode

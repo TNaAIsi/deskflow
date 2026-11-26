@@ -38,6 +38,7 @@
 
 #include <QCheckBox>
 #include <QCloseEvent>
+#include <QComboBox>
 #include <QCryptographicHash>
 #include <QDesktopServices>
 #include <QFileDialog>
@@ -54,6 +55,7 @@
 #include <QRegularExpressionValidator>
 #include <QScreen>
 #include <QScrollBar>
+#include <QSignalBlocker>
 #include <QTimer>
 
 #include <memory>
@@ -324,16 +326,12 @@ void MainWindow::connectSlots()
   connect(&m_coreProcess, &CoreProcess::peerFingerprint, this, &MainWindow::handlePeerFingerprint);
   connect(&m_coreProcess, &CoreProcess::missingKeyboardLayouts, this, &MainWindow::handleMissingKeyboardLayouts);
 
-  if (Settings::value(Settings::Gui::AutoStartCore).toBool()) {
-    connect(ui->btnToggleCore, &QPushButton::clicked, m_actionStopCore, &QAction::trigger, Qt::UniqueConnection);
-  } else {
-    connect(ui->btnToggleCore, &QPushButton::clicked, m_actionStartCore, &QAction::trigger, Qt::UniqueConnection);
-  }
+  connect(ui->btnToggleCore, &QPushButton::clicked, m_actionStartCore, &QAction::trigger, Qt::UniqueConnection);
 
   connect(ui->btnRestartCore, &QPushButton::clicked, this, &MainWindow::resetCore);
 
-  connect(ui->lineHostname, &QLineEdit::returnPressed, ui->btnRestartCore, &QPushButton::click);
-  connect(ui->lineHostname, &QLineEdit::textChanged, this, &MainWindow::remoteHostChanged);
+  connect(ui->cbHostname->lineEdit(), &QLineEdit::returnPressed, ui->btnToggleCore, &QPushButton::click);
+  connect(ui->cbHostname, &QComboBox::editTextChanged, this, &MainWindow::remoteHostChanged);
 
   connect(ui->btnSaveServerConfig, &QPushButton::clicked, this, &MainWindow::saveServerConfig);
   connect(ui->btnConfigureServer, &QPushButton::clicked, this, [this] { showConfigureServer(""); });
@@ -452,6 +450,18 @@ void MainWindow::coreProcessError(CoreProcess::Error error)
 
 void MainWindow::startCore()
 {
+  // No Mode Set
+  if (m_coreProcess.mode() == CoreMode::None) {
+    qDebug().noquote() << "skipping core start, no mode set";
+    return;
+  }
+
+  // Invalid client settings
+  if (m_coreProcess.mode() == CoreMode::Client && Settings::value(Settings::Client::RemoteHost).toString().isEmpty()) {
+    qDebug().noquote() << "skipping core start, undefined remotehost";
+    return;
+  }
+
   // Save current IP state when server starts
   if (m_coreProcess.mode() == CoreMode::Server && Settings::value(Settings::Core::Interface).toString().isEmpty()) {
     m_serverStartIPs = NetworkMonitor::validAddresses();
@@ -699,8 +709,6 @@ void MainWindow::open()
   }
 
   if (Settings::value(Settings::Gui::AutoStartCore).toBool()) {
-    if (ui->rbModeClient->isChecked() && ui->lineHostname->text().isEmpty())
-      return;
     startCore();
   }
 }
@@ -751,8 +759,12 @@ void MainWindow::applyConfig()
     setWindowTitle(kAppName);
   }
 
-  if (const auto host = Settings::value(Settings::Client::RemoteHost).toString(); !host.isEmpty())
-    ui->lineHostname->setText(host);
+  const auto host = Settings::value(Settings::Client::RemoteHost).toString();
+  QSignalBlocker hostnameBlocker(ui->cbHostname);
+  ui->cbHostname->clear();
+  ui->cbHostname->addItems(Settings::value(Settings::Client::RecentRemoteHosts).toStringList());
+  if (!host.isEmpty())
+    ui->cbHostname->setCurrentText(host);
 
   updateFingerprintButton();
   setTrayIcon();
@@ -772,8 +784,9 @@ void MainWindow::saveSettings() const
   } else if (ui->rbModeServer->isChecked()) {
     Settings::setValue(Settings::Core::CoreMode, Settings::CoreMode::Server);
   }
-  if (!ui->lineHostname->text().isEmpty())
-    Settings::setValue(Settings::Client::RemoteHost, ui->lineHostname->text());
+  if (!ui->cbHostname->currentText().isEmpty()) {
+    Settings::setValue(Settings::Client::RemoteHost, ui->cbHostname->currentText());
+  }
   Settings::save();
 }
 
@@ -847,10 +860,10 @@ void MainWindow::handleConnectionRefused(deskflow::core::ConnectionRefusal reaso
   if (reason != deskflow::core::ConnectionRefusal::AlreadyConnected)
     return;
 
-  if (!isVisible() || m_clientErrorVisible)
+  if (!isVisible() || m_alreadyConnectedShown)
     return;
 
-  m_clientErrorVisible = true;
+  m_alreadyConnectedShown = true;
   showAndActivate();
 
   const auto address = Settings::value(Settings::Client::RemoteHost).toString();
@@ -862,8 +875,6 @@ void MainWindow::handleConnectionRefused(deskflow::core::ConnectionRefusal reaso
          "single instance of the client process is running.</p>")
           .arg(address)
   );
-
-  m_clientErrorVisible = false;
 }
 
 void MainWindow::handleMissingKeyboardLayouts(const QString &layouts)
@@ -1018,6 +1029,7 @@ void MainWindow::coreProcessStateChanged(ProcessState state)
     m_actionStopCore->setEnabled(true);
 
     if (state == Starting) {
+      m_alreadyConnectedShown = false;
       saveSettings();
     }
 
@@ -1136,8 +1148,28 @@ void MainWindow::coreConnectionStateChanged(ConnectionState state)
   // when the correct TLS version string is detected.
   if (state != ConnectionState::Connected) {
     secureSocket(false);
-  } else if (isVisible()) {
-    showFirstConnectedMessage();
+  } else {
+    m_alreadyConnectedShown = false;
+    if (m_coreProcess.mode() == CoreMode::Client) {
+      if (const auto host = ui->cbHostname->currentText(); !host.isEmpty()) {
+        QStringList recentHosts = Settings::value(Settings::Client::RecentRemoteHosts).toStringList();
+        if (recentHosts.isEmpty() || recentHosts.first() != host) {
+          recentHosts.removeAll(host);
+          recentHosts.prepend(host);
+          while (recentHosts.size() > 10) {
+            recentHosts.removeLast();
+          }
+          Settings::setValue(Settings::Client::RecentRemoteHosts, recentHosts);
+          QSignalBlocker hostnameBlocker(ui->cbHostname);
+          ui->cbHostname->clear();
+          ui->cbHostname->addItems(recentHosts);
+          ui->cbHostname->setCurrentText(host);
+        }
+      }
+    }
+    if (isVisible()) {
+      showFirstConnectedMessage();
+    }
   }
 }
 
@@ -1245,8 +1277,11 @@ void MainWindow::showConfigureClient()
     dialog.setNativeKeyboardStatus(nativeKeyboardUiStatus());
   });
   nativeStatus.start();
-  if ((dialog.exec() == QDialog::Accepted) && dialog.requiresCoreRestart() && m_coreProcess.isStarted())
-    m_coreProcess.restart();
+  if (dialog.exec() == QDialog::Accepted) {
+    applyConfig();
+    if (dialog.requiresCoreRestart() && m_coreProcess.isStarted())
+      m_coreProcess.restart();
+  }
 }
 
 void MainWindow::setupNativeKeyboard()
@@ -1543,5 +1578,5 @@ bool MainWindow::canRunCore() const
   const auto mode = m_coreProcess.mode();
   const bool isServer = mode == Settings::CoreMode::Server;
   const bool isClient = mode == Settings::CoreMode::Client;
-  return ((isServer || isClient) && (isClient && !ui->lineHostname->text().isEmpty()) || isServer);
+  return ((isServer || isClient) && (isClient && !ui->cbHostname->currentText().isEmpty()) || isServer);
 }

@@ -71,6 +71,7 @@ ClientConfigDialog::ClientConfigDialog(QWidget *parent)
   m_tabs->addTab(m_sharing->filesPage(), tr("Files and cache"));
   outer->addWidget(m_tabs, 1);
   layout()->addWidget(m_buttonBox);
+  ui->btnClearServerHistory->setIcon(QIcon::fromTheme(QStringLiteral("edit-clear-all")));
   initConnections();
   load();
   updateControls();
@@ -132,6 +133,9 @@ void ClientConfigDialog::updateControls() const
   ui->sbXScrollScale->setEnabled(writable);
   ui->cbYScrollInvert->setEnabled(writable);
   ui->sbYScrollScale->setEnabled(writable);
+  ui->btnClearServerHistory->setEnabled(
+      writable && !Settings::value(Settings::Client::RecentRemoteHosts).toStringList().isEmpty()
+  );
 }
 
 void ClientConfigDialog::initConnections() const
@@ -144,6 +148,7 @@ void ClientConfigDialog::initConnections() const
   connect(
       ui->cbDynamicConnectTime, &QCheckBox::checkStateChanged, this, &ClientConfigDialog::setButtonBoxEnabledButtons
   );
+  connect(ui->btnClearServerHistory, &QPushButton::clicked, this, &ClientConfigDialog::clearServerHistory);
   connect(ui->cbLanguageSync, &QCheckBox::checkStateChanged, this, &ClientConfigDialog::setButtonBoxEnabledButtons);
   connect(ui->cbCapsLockInputSource, &QCheckBox::checkStateChanged, this, [this] {
     updateControls();
@@ -244,4 +249,10 @@ void ClientConfigDialog::save()
   Settings::setValue(Settings::Client::XScrollScale, ui->sbXScrollScale->value());
   m_sharing->saveOptions();
   QDialog::accept();
+}
+
+void ClientConfigDialog::clearServerHistory()
+{
+  Settings::setValue(Settings::Client::RecentRemoteHosts, QVariant());
+  ui->btnClearServerHistory->setEnabled(false);
 }

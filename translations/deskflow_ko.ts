@@ -209,6 +209,10 @@ p, li { white-space: pre-wrap; }
         <source>Files and cache</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Clear Server History</source>
+        <translation type="unfinished">서버 기록 지우기</translation>
+    </message>
 </context>
 <context>
     <name>ComputerSettingsDialog</name>
