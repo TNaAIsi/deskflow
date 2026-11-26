@@ -123,6 +123,7 @@ protected:
 
   void sendEvent(EventTypes);
   void discardWrittenData(int bytesWrote);
+  void onDisconnected();
 
   StreamBuffer m_inputBuffer;
   StreamBuffer m_outputBuffer;
@@ -134,7 +135,6 @@ private:
   void onConnected();
   void onInputShutdown();
   void onOutputShutdown();
-  void onDisconnected();
 
   ISocketMultiplexerJob *serviceConnecting(ISocketMultiplexerJob *, bool, bool, bool);
   ISocketMultiplexerJob *serviceConnected(ISocketMultiplexerJob *, bool, bool, bool);

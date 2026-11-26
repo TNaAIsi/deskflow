@@ -29,6 +29,7 @@ private Q_SLOTS:
   void nativeKeyboardNegotiatesExplicitlyAndSendsPhysicalUsages();
   void nativeKeyboardUnsupportedSourceKeepsLegacyWire();
   void nativeKeyboardBroadcastCompatibilityCanRestoreNativeSession();
+  void probeConnection_probesOnceAndRestoresFullAlarmOnReply();
 
 private:
   Log m_log;

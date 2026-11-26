@@ -14,6 +14,8 @@
 class ClientProxy1_3 : public ClientProxy1_2
 {
 public:
+  static constexpr double kProbeTimeoutSeconds = 2.0;
+
   ClientProxy1_3(const std::string &name, deskflow::IStream *adoptedStream, IEventQueue *events);
   ClientProxy1_3(ClientProxy1_3 const &) = delete;
   ClientProxy1_3(ClientProxy1_3 &&) = delete;
@@ -21,6 +23,8 @@ public:
 
   ClientProxy1_3 &operator=(ClientProxy1_3 const &) = delete;
   ClientProxy1_3 &operator=(ClientProxy1_3 &&) = delete;
+
+  void probeConnection() override;
 
   // IClient overrides
   void mouseWheel(int32_t xDelta, int32_t yDelta) override;
@@ -39,4 +43,5 @@ private:
   double m_keepAliveRate = kKeepAliveRate;
   EventQueueTimer *m_keepAliveTimer = nullptr;
   IEventQueue *m_events = nullptr;
+  bool m_probing = false;
 };

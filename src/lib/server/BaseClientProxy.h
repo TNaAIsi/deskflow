@@ -32,6 +32,10 @@ public:
   */
   void setJumpCursorPos(int32_t x, int32_t y);
 
+  virtual void probeConnection()
+  {
+  }
+
   //@}
   //! @name accessors
   //@{

@@ -15,12 +15,14 @@
 #include "server/ClientProxy1_0.h"
 #include "server/ClientProxy1_1.h"
 #include "server/ClientProxy1_10.h"
+#include "server/ClientProxy1_3.h"
 #include "server/ClientProxy1_6.h"
 #include "server/ClientProxy1_7.h"
 #include "server/ClientProxy1_8.h"
 #include "server/ClientProxy1_9.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -160,6 +162,57 @@ public:
   {
     stream->push(QByteArray(1, static_cast<char>(ready)));
     return parseMessage(reinterpret_cast<const uint8_t *>(kMsgNativeKeyboardReady));
+  }
+};
+
+class HeartbeatEventQueue : public MockEventQueue
+{
+public:
+  EventQueueTimer *newOneShotTimer(double duration, void *target) override
+  {
+    ++oneShotTimersCreated;
+    lastOneShotDuration = duration;
+    lastOneShotTarget = target;
+    ++activeTimers;
+    return reinterpret_cast<EventQueueTimer *>(static_cast<uintptr_t>(++m_nextTimerId));
+  }
+
+  EventQueueTimer *newTimer(double, void *) override
+  {
+    ++activeTimers;
+    return reinterpret_cast<EventQueueTimer *>(static_cast<uintptr_t>(++m_nextTimerId));
+  }
+
+  void deleteTimer(EventQueueTimer *timer) override
+  {
+    if (timer != nullptr) {
+      --activeTimers;
+    }
+  }
+
+  int oneShotTimersCreated = 0;
+  int activeTimers = 0;
+  double lastOneShotDuration = 0.0;
+  void *lastOneShotTarget = nullptr;
+
+private:
+  int m_nextTimerId = 0;
+};
+
+class TestKeepAliveProxy : public ClientProxy1_3
+{
+public:
+  using ClientProxy1_3::ClientProxy1_3;
+
+  bool completeHandshake(CapturingStream *stream)
+  {
+    stream->push(QByteArray::fromHex("0000 0000 0780 0438 0000 0000 0000"));
+    return parseHandshakeMessage(reinterpret_cast<const uint8_t *>(kMsgDInfo));
+  }
+
+  bool receiveMessage(const char *code)
+  {
+    return parseMessage(reinterpret_cast<const uint8_t *>(code));
   }
 };
 
@@ -459,6 +512,43 @@ void ClientProxyTests::nativeKeyboardBroadcastCompatibilityCanRestoreNativeSessi
   QVERIFY(proxy.usesPhysicalKeyboard());
   QCOMPARE(stream->take(), QByteArray("NKEN\1\0", 6));
   QCOMPARE(changes, 2);
+}
+
+void ClientProxyTests::probeConnection_probesOnceAndRestoresFullAlarmOnReply()
+{
+  HeartbeatEventQueue events;
+  auto *stream = new CapturingStream;
+  {
+    TestKeepAliveProxy proxy("client", stream, &events);
+    QCOMPARE(stream->take(), QByteArray("QINF"));
+    QVERIFY(proxy.completeHandshake(stream));
+    QCOMPARE(stream->take(), QByteArray("CIAK"));
+    QCOMPARE(events.oneShotTimersCreated, 1);
+    QCOMPARE(events.lastOneShotDuration, kKeepAliveRate * kKeepAlivesUntilDeath);
+
+    proxy.probeConnection();
+    QCOMPARE(stream->take(), QByteArray("CALV"));
+    QCOMPARE(events.oneShotTimersCreated, 2);
+    QCOMPARE(events.lastOneShotDuration, std::min(kKeepAliveRate, ClientProxy1_3::kProbeTimeoutSeconds));
+
+    // Repeated reconnect attempts during an active probe must not extend the deadline.
+    proxy.probeConnection();
+    QVERIFY(stream->take().isEmpty());
+    QCOMPARE(events.oneShotTimersCreated, 2);
+    QCOMPARE(events.lastOneShotDuration, std::min(kKeepAliveRate, ClientProxy1_3::kProbeTimeoutSeconds));
+
+    // Receiving a keepalive reply clears probe state and restores the normal flatline alarm.
+    QVERIFY(proxy.receiveMessage(kMsgCKeepAlive));
+    QCOMPARE(events.oneShotTimersCreated, 3);
+    QCOMPARE(events.lastOneShotDuration, kKeepAliveRate * kKeepAlivesUntilDeath);
+
+    // A subsequent duplicate connect after recovery can probe again.
+    proxy.probeConnection();
+    QCOMPARE(stream->take(), QByteArray("CALV"));
+    QCOMPARE(events.oneShotTimersCreated, 4);
+    QCOMPARE(events.lastOneShotDuration, std::min(kKeepAliveRate, ClientProxy1_3::kProbeTimeoutSeconds));
+  }
+  QCOMPARE(events.activeTimers, 0);
 }
 
 QTEST_MAIN(ClientProxyTests)

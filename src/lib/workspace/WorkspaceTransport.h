@@ -61,6 +61,7 @@ private:
     QString peer;
     Channel channel = Channel::Control;
     bool welcomed = false;
+    bool probing = false;
     QByteArray fingerprint;
     QElapsedTimer activity;
   };

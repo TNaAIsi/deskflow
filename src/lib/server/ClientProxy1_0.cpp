@@ -88,6 +88,14 @@ void ClientProxy1_0::removeHeartbeatTimer()
   }
 }
 
+void ClientProxy1_0::armOneShotHeartbeatTimer(double alarmSeconds)
+{
+  removeHeartbeatTimer();
+  if (alarmSeconds > 0.0) {
+    m_heartbeatTimer = m_events->newOneShotTimer(alarmSeconds, this);
+  }
+}
+
 void ClientProxy1_0::resetHeartbeatTimer()
 {
   // reset the alarm

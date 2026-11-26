@@ -11,6 +11,7 @@
 #include "arch/ArchException.h"
 #include "base/IEventQueue.h"
 #include "base/Log.h"
+#include "base/Stopwatch.h"
 #include "mt/Lock.h"
 #include "net/NetworkAddress.h"
 #include "net/SocketException.h"
@@ -168,9 +169,14 @@ void TCPSocket::write(const void *buffer, uint32_t n)
 
 void TCPSocket::flush()
 {
+  static constexpr double kFlushTimeoutSeconds = 2.0;
+  Stopwatch timer(true);
   Lock lock(&m_mutex);
-  while (m_flushed == false) {
-    m_flushed.wait();
+  while (m_flushed == false && m_writable) {
+    if (!m_flushed.wait(timer, kFlushTimeoutSeconds)) {
+      LOG_WARN("timed out flushing socket output buffer");
+      break;
+    }
   }
 }
 
@@ -544,8 +550,10 @@ ISocketMultiplexerJob *TCPSocket::serviceConnected(ISocketMultiplexerJob *job, b
     }
   }
 
-  if (readResult == Break || writeResult == Break)
+  if (readResult == Break || writeResult == Break) {
+    onDisconnected();
     return nullptr;
+  }
 
   if (writeResult == New || readResult == New)
     return newJob();

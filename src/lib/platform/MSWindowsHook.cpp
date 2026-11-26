@@ -29,6 +29,7 @@ static HHOOK g_keyboardLL = nullptr;
 static HHOOK g_mouseLL = nullptr;
 static bool g_screenSaver = false;
 static std::atomic<EHookMode> g_mode{kHOOK_DISABLE};
+static std::atomic<uint64_t> g_coreHeartbeatMs{0};
 static std::atomic_bool g_physicalKeyboardMode{false};
 static bool g_lastPhysicalKeyboardMode = false; // Accessed only by the hook thread.
 static std::atomic<uint8_t> g_physicalModifiers{0};
@@ -149,11 +150,19 @@ void MSWindowsHook::setZone(int32_t x, int32_t y, int32_t w, int32_t h, int32_t 
 
 void MSWindowsHook::setMode(EHookMode mode)
 {
-  if (mode == g_mode) {
+  if (mode == g_mode.load(std::memory_order_relaxed)) {
     // no change
     return;
   }
-  g_mode = mode;
+  if (mode == kHOOK_RELAY_EVENTS) {
+    heartbeat();
+  }
+  g_mode.store(mode, std::memory_order_release);
+}
+
+void MSWindowsHook::heartbeat()
+{
+  g_coreHeartbeatMs.store(GetTickCount64(), std::memory_order_relaxed);
 }
 
 void MSWindowsHook::setPhysicalKeyboardMode(bool enabled)
@@ -364,8 +373,38 @@ static WPARAM mapKeyDown(
   return charAndVirtKey;
 }
 
+static bool recoverStalledRelay()
+{
+  const uint64_t lastBeat = g_coreHeartbeatMs.load(std::memory_order_relaxed);
+  if (lastBeat == 0) {
+    return false;
+  }
+
+  const uint64_t now = GetTickCount64();
+  if (now <= lastBeat || (now - lastBeat) <= MSWindowsHook::kRelayHeartbeatTimeoutMs) {
+    return false;
+  }
+
+  EHookMode expected = kHOOK_RELAY_EVENTS;
+  if (g_mode.compare_exchange_strong(expected, kHOOK_WATCH_JUMP_ZONE, std::memory_order_acq_rel)) {
+    if (g_hookThread != 0) {
+      PostThreadMessage(g_hookThread, DESKFLOW_MSG_WATCHDOG_RECOVER, 0, 0);
+    }
+    if (g_threadID != 0) {
+      PostThreadMessage(g_threadID, DESKFLOW_MSG_WATCHDOG_RECOVER, 0, 0);
+    }
+    return true;
+  }
+
+  return g_mode.load(std::memory_order_acquire) != kHOOK_RELAY_EVENTS;
+}
+
 static bool keyboardHookHandler(WPARAM wParam, LPARAM lParam)
 {
+  if (g_mode.load(std::memory_order_acquire) == kHOOK_RELAY_EVENTS && recoverStalledRelay()) {
+    return false;
+  }
+
   DWORD vkCode = static_cast<DWORD>(wParam);
   bool kf_up = (lParam & (KF_UP << 16)) != 0;
 
@@ -601,6 +640,10 @@ static LRESULT CALLBACK keyboardLLHook(int code, WPARAM wParam, LPARAM lParam)
 
 static bool mouseHookHandler(WPARAM wParam, int32_t x, int32_t y, int32_t data)
 {
+  if (g_mode.load(std::memory_order_acquire) == kHOOK_RELAY_EVENTS && recoverStalledRelay()) {
+    return false;
+  }
+
   switch (wParam) {
   case WM_LBUTTONDOWN:
   case WM_MBUTTONDOWN:
@@ -746,6 +789,7 @@ EHookResult MSWindowsHook::install()
 
   // reset fake input flag
   g_fakeServerInput = false;
+  g_coreHeartbeatMs.store(GetTickCount64(), std::memory_order_relaxed);
   g_physicalModifiersKnown.store(false);
   g_physicalModifiers.store(physicalModifierMask());
   g_physicalModifiersKnown.store(true, std::memory_order_release);
@@ -813,6 +857,7 @@ int MSWindowsHook::uninstall()
   g_keyStateValid = false;
   g_physicalModifiers.store(0);
   g_physicalModifiersKnown.store(false, std::memory_order_release);
+  g_coreHeartbeatMs.store(0, std::memory_order_relaxed);
 
   return 1;
 }

@@ -12,6 +12,7 @@
 #include "base/Log.h"
 #include "deskflow/ProtocolUtil.h"
 
+#include <algorithm>
 #include <cstring>
 
 //
@@ -29,6 +30,22 @@ ClientProxy1_3::~ClientProxy1_3()
 {
   // cannot do this in superclass or our override wouldn't get called
   removeHeartbeatTimer();
+}
+
+void ClientProxy1_3::probeConnection()
+{
+  if (m_probing) {
+    return;
+  }
+
+  m_probing = true;
+  LOG_DEBUG("probing client \"%s\" connection after duplicate connect", getName().c_str());
+  keepAlive();
+
+  const double probeAlarm =
+      (m_keepAliveRate > 0.0) ? std::min(m_keepAliveRate, kProbeTimeoutSeconds) : kProbeTimeoutSeconds;
+  ClientProxy1_2::removeHeartbeatTimer();
+  armOneShotHeartbeatTimer(probeAlarm);
 }
 
 void ClientProxy1_3::mouseWheel(int32_t xDelta, int32_t yDelta)
@@ -62,6 +79,7 @@ void ClientProxy1_3::setHeartbeatRate(double rate, double)
 
 void ClientProxy1_3::resetHeartbeatTimer()
 {
+  m_probing = false;
   // reset the alarm but not the keep alive timer
   ClientProxy1_2::removeHeartbeatTimer();
   ClientProxy1_2::addHeartbeatTimer();
@@ -81,6 +99,7 @@ void ClientProxy1_3::addHeartbeatTimer()
 
 void ClientProxy1_3::removeHeartbeatTimer()
 {
+  m_probing = false;
   // remove the timer that sends keep alives periodically
   if (m_keepAliveTimer != nullptr) {
     m_events->removeHandler(EventTypes::Timer, m_keepAliveTimer);

@@ -29,4 +29,14 @@ create_test(
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/net"
 )
 
+create_test(
+  NAME TCPSocketTests
+  DEPENDS net
+  LIBS base arch mt io Qt::Network ${extra_libs}
+  SOURCE TCPSocketTests.cpp
+  WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/net"
+)
+
+set_tests_properties(TCPSocketTests PROPERTIES TIMEOUT 60)
+
 

@@ -20,9 +20,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 
-#if !defined(TCP_NODELAY)
 #include <netinet/tcp.h>
-#endif
 
 static const int s_family[] = {
     PF_UNSPEC,
@@ -427,6 +425,24 @@ void ArchNetworkBSD::setKeepAliveOnSocket(ArchSocket s, bool keepAlive)
   int opt = keepAlive;
   if (setsockopt(s->m_fd, SOL_SOCKET, SO_KEEPALIVE, reinterpret_cast<const optval_t *>(&opt), sizeof(opt)) == -1) {
     throwError(errno);
+  }
+  if (keepAlive) {
+    int idle = 10;
+#if defined(TCP_KEEPALIVE)
+    (void)setsockopt(s->m_fd, IPPROTO_TCP, TCP_KEEPALIVE, reinterpret_cast<const optval_t *>(&idle), sizeof(idle));
+#elif defined(TCP_KEEPIDLE)
+    (void)setsockopt(s->m_fd, IPPROTO_TCP, TCP_KEEPIDLE, reinterpret_cast<const optval_t *>(&idle), sizeof(idle));
+#endif
+#if defined(TCP_KEEPINTVL)
+    int interval = 2;
+    (void)setsockopt(
+        s->m_fd, IPPROTO_TCP, TCP_KEEPINTVL, reinterpret_cast<const optval_t *>(&interval), sizeof(interval)
+    );
+#endif
+#if defined(TCP_KEEPCNT)
+    int count = 3;
+    (void)setsockopt(s->m_fd, IPPROTO_TCP, TCP_KEEPCNT, reinterpret_cast<const optval_t *>(&count), sizeof(count));
+#endif
   }
 }
 

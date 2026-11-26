@@ -64,6 +64,7 @@ protected:
   virtual void resetHeartbeatTimer();
   virtual void addHeartbeatTimer();
   virtual void removeHeartbeatTimer();
+  void armOneShotHeartbeatTimer(double alarmSeconds);
   virtual bool recvClipboard();
 
 private:

@@ -133,6 +133,14 @@ Server::Server(ServerConfig &config, PrimaryClient *primaryClient, deskflow::Com
   m_events->addHandler(EventTypes::PrimaryComputerFakeInputEnd, m_inputFilter, [this](const auto &) {
     m_primaryClient->fakeInputEnd();
   });
+  m_events->addHandler(
+      EventTypes::PrimaryComputerWatchdogRecover, m_primaryClient->getEventTarget(),
+      [this](const auto &) {
+        if (m_active != m_primaryClient) {
+          forceLeaveClient(m_active);
+        }
+      }
+  );
 
   // add connection
   addClient(m_primaryClient);
@@ -183,6 +191,7 @@ Server::~Server()
   m_events->removeHandler(PrimaryScreenSaverDeactivated, m_primaryClient->getEventTarget());
   m_events->removeHandler(PrimaryComputerFakeInputBegin, m_inputFilter);
   m_events->removeHandler(PrimaryComputerFakeInputEnd, m_inputFilter);
+  m_events->removeHandler(PrimaryComputerWatchdogRecover, m_primaryClient->getEventTarget());
   m_events->removeHandler(Timer, this);
   stopSwitch();
 
@@ -279,6 +288,10 @@ void Server::adoptClient(BaseClientProxy *client)
   // add client to client list
   if (!addClient(client)) {
     // can only have one computer with a given name at any given time
+    const auto existing = m_clients.find(getName(client));
+    if (existing != m_clients.end() && existing->second != m_primaryClient) {
+      existing->second->probeConnection();
+    }
     LOG_WARN("a client with name \"%s\" is already connected", getName(client).c_str());
     closeClient(client, kMsgEBusy);
     return;
@@ -1733,6 +1746,8 @@ bool Server::routeDisplayMotion(int32_t oldX, int32_t oldY, int32_t x, int32_t y
   if (!motion.handled)
     return false;
   if (!motion.sourceRect.isValid()) {
+    if (!primary)
+      return false;
     // The provider may be reconnecting, or this client may be an older release.
     // Preserve monitor-mode authority and ordinary local pointer movement; do
     // not unexpectedly cross using an unrelated, formerly saved computer grid.
@@ -1745,7 +1760,7 @@ bool Server::routeDisplayMotion(int32_t oldX, int32_t oldY, int32_t x, int32_t y
     noSwitch(motion.point.x(), motion.point.y());
     m_x = motion.point.x();
     m_y = motion.point.y();
-    if (!primary || motion.point != QPoint(x, y))
+    if (motion.point != QPoint(x, y))
       m_active->mouseMove(m_x, m_y);
     return true;
   }

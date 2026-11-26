@@ -1008,6 +1008,12 @@ bool MSWindowsComputer::onPreDispatchPrimary(HWND, UINT message, WPARAM wParam, 
     LOG_WARN("unmatched post warp");
     return true;
 
+  case DESKFLOW_MSG_WATCHDOG_RECOVER:
+    LOG_WARN("relay watchdog recovered local input after core stall");
+    m_isOnComputer = true;
+    sendEvent(EventTypes::PrimaryComputerWatchdogRecover);
+    return true;
+
   case WM_HOTKEY:
     // we discard these messages.  we'll catch the hot key in the
     // regular key event handling, where we can detect both key

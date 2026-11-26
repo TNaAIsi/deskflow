@@ -25,6 +25,8 @@ private Q_SLOTS:
   void wrongChannelMessageClosesOnlyThatChannel();
   void controlDisconnectClosesAuxiliaries();
   void expiredPinnedCertificateIsRejected();
+  void duplicateControlKeepsLivePeerConnected();
+  void duplicateControlAbortsStalePeerPromptly();
 
 private:
   QTemporaryDir m_directory;

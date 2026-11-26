@@ -11,6 +11,7 @@
 #include <QHostAddress>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QPointer>
 #include <QSslCertificate>
 #include <QSslKey>
 #include <QSslSocket>
@@ -388,6 +389,7 @@ void WorkspaceTransport::read(QSslSocket *socket)
   for (const auto &frame : frames) {
     if (!m_links.contains(socket))
       return;
+    m_links[socket].probing = false;
     const auto link = m_links.value(socket);
     if (!link.welcomed) {
       if (!frame.payload.isEmpty()) {
@@ -432,6 +434,24 @@ void WorkspaceTransport::receiveHandshake(QSslSocket *socket, const QJsonObject 
     if (channel == Channel::Control) {
       if (m_peers.contains(name)) {
         // A duplicate identity may not replace a live session.
+        // Actively probe the existing control socket in case it is half-open.
+        auto *existingControl = m_peers.value(name).control.data();
+        if (existingControl != nullptr && m_links.contains(existingControl)) {
+          auto &existingLink = m_links[existingControl];
+          if (!existingLink.probing) {
+            existingLink.probing = true;
+            writeFrame(existingControl, {{"type", "ping"}});
+            const QPointer<QSslSocket> watched(existingControl);
+            QTimer::singleShot(2500, this, [this, watched] {
+              if (watched && m_links.contains(watched.data()) && m_links.value(watched.data()).probing) {
+                auto *stale = watched.data();
+                stale->abort();
+                if (m_links.contains(stale))
+                  disconnected(stale);
+              }
+            });
+          }
+        }
         socket->abort();
         return;
       }

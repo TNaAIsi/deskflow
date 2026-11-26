@@ -506,4 +506,66 @@ void WorkspaceTransportTests::expiredPinnedCertificateIsRejected()
   QVERIFY(client.peers().isEmpty());
 }
 
+void WorkspaceTransportTests::duplicateControlKeepsLivePeerConnected()
+{
+  WorkspaceTransport server;
+  WorkspaceTransport client;
+  QVERIFY(server.setIdentityFiles(m_certificate, m_trusted, m_trusted));
+  QVERIFY(client.setIdentityFiles(m_certificate, m_trusted, m_trusted));
+  QVERIFY(server.start(true, QStringLiteral("server"), 0, {}, QStringLiteral("127.0.0.1")));
+  QVERIFY(client.start(false, QStringLiteral("client"), server.listeningPort(), {QStringLiteral("127.0.0.1")}));
+  QTRY_VERIFY_WITH_TIMEOUT(ready(server, QStringLiteral("client")), 10000);
+
+  QSslSocket duplicate;
+  connectRaw(duplicate, m_certificate, server.listeningPort());
+  QTRY_VERIFY_WITH_TIMEOUT(duplicate.isEncrypted(), 5000);
+  QVERIFY(rawHello(duplicate, QStringLiteral("client"), QStringLiteral("control")).isEmpty());
+  QTRY_COMPARE_WITH_TIMEOUT(duplicate.state(), QAbstractSocket::UnconnectedState, 5000);
+
+  // Wait past the 2500ms duplicate-probe timeout; the live peer answers "ping"
+  // with "pong" and must remain connected.
+  QTest::qWait(2800);
+  QVERIFY(server.channelReady(QStringLiteral("client"), Channel::Control));
+  QVERIFY(client.channelReady(QStringLiteral("server"), Channel::Control));
+
+  QSignalSpy received(&server, &WorkspaceTransport::messageReceived);
+  QVERIFY(client.send(QStringLiteral("server"), QStringLiteral("identify"), {{QStringLiteral("alive"), true}}));
+  QTRY_COMPARE_WITH_TIMEOUT(received.size(), 1, 5000);
+}
+
+void WorkspaceTransportTests::duplicateControlAbortsStalePeerPromptly()
+{
+  WorkspaceTransport server;
+  QVERIFY(server.setIdentityFiles(m_certificate, m_trusted, m_trusted));
+  QVERIFY(server.start(true, QStringLiteral("server"), 0, {}, QStringLiteral("127.0.0.1")));
+
+  QSslSocket stale;
+  connectRaw(stale, m_certificate, server.listeningPort());
+  QTRY_VERIFY_WITH_TIMEOUT(stale.isEncrypted(), 5000);
+  const auto welcome = rawHello(stale, QStringLiteral("mac-peer"), QStringLiteral("control"));
+  QCOMPARE(welcome.value(QStringLiteral("token")).toString().size(), 32);
+  QVERIFY(server.channelReady(QStringLiteral("mac-peer"), Channel::Control));
+
+  // Simulate a half-open peer: stale keeps the TCP socket open without replying
+  // to control frames, while a new connection with the same name arrives.
+  QElapsedTimer timer;
+  timer.start();
+  QSslSocket reconnect;
+  connectRaw(reconnect, m_certificate, server.listeningPort());
+  QTRY_VERIFY_WITH_TIMEOUT(reconnect.isEncrypted(), 5000);
+  QVERIFY(rawHello(reconnect, QStringLiteral("mac-peer"), QStringLiteral("control")).isEmpty());
+  QTRY_COMPARE_WITH_TIMEOUT(reconnect.state(), QAbstractSocket::UnconnectedState, 5000);
+
+  QTRY_VERIFY_WITH_TIMEOUT(!server.channelReady(QStringLiteral("mac-peer"), Channel::Control), 3500);
+  QTRY_VERIFY_WITH_TIMEOUT(server.peers().isEmpty(), 1000);
+  QVERIFY(timer.elapsed() < 4000);
+
+  QSslSocket fresh;
+  connectRaw(fresh, m_certificate, server.listeningPort());
+  QTRY_VERIFY_WITH_TIMEOUT(fresh.isEncrypted(), 5000);
+  const auto freshWelcome = rawHello(fresh, QStringLiteral("mac-peer"), QStringLiteral("control"));
+  QCOMPARE(freshWelcome.value(QStringLiteral("token")).toString().size(), 32);
+  QVERIFY(server.channelReady(QStringLiteral("mac-peer"), Channel::Control));
+}
+
 QTEST_GUILESS_MAIN(WorkspaceTransportTests)

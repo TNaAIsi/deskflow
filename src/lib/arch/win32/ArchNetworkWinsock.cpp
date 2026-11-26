@@ -15,6 +15,7 @@
 #include "base/Log.h"
 
 #include <malloc.h>
+#include <mstcpip.h>
 
 static const int s_family[] = {
     PF_UNSPEC,
@@ -55,6 +56,10 @@ static BOOL(PASCAL FAR *WSAResetEvent_winsock)(WSAEVENT);
 static int(PASCAL FAR *WSAEventSelect_winsock)(SOCKET, WSAEVENT, long);
 static DWORD(PASCAL FAR *WSAWaitForMultipleEvents_winsock)(DWORD, const WSAEVENT FAR *, BOOL, DWORD, BOOL);
 static int(PASCAL FAR *WSAEnumNetworkEvents_winsock)(SOCKET, WSAEVENT, LPWSANETWORKEVENTS);
+static int(PASCAL FAR *WSAIoctl_winsock)(
+    SOCKET s, DWORD dwIoControlCode, LPVOID lpvInBuffer, DWORD cbInBuffer, LPVOID lpvOutBuffer, DWORD cbOutBuffer,
+    LPDWORD lpcbBytesReturned, LPWSAOVERLAPPED lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
+);
 
 #undef FD_ISSET
 #define FD_ISSET(fd, set) WSAFDIsSet_winsock((SOCKET)(fd), (fd_set FAR *)(set))
@@ -190,6 +195,7 @@ void ArchNetworkWinsock::initModule(HMODULE module)
       DWORD(PASCAL FAR *)(DWORD, const WSAEVENT FAR *, BOOL, DWORD, BOOL)
   );
   setfunc(WSAEnumNetworkEvents_winsock, WSAEnumNetworkEvents, int(PASCAL FAR *)(SOCKET, WSAEVENT, LPWSANETWORKEVENTS));
+  WSAIoctl_winsock = reinterpret_cast<decltype(WSAIoctl_winsock)>(::GetProcAddress(module, "WSAIoctl"));
 
   s_networkModule = module;
 }
@@ -620,6 +626,15 @@ void ArchNetworkWinsock::setKeepAliveOnSocket(ArchSocket s, bool keepAlive)
   int opt = keepAlive;
   if (setsockopt_winsock(s->m_socket, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt)) == SOCKET_ERROR) {
     throwError(getsockerror_winsock());
+  }
+  if (keepAlive && WSAIoctl_winsock != nullptr) {
+    tcp_keepalive vals{1, 10000, 2000};
+    DWORD bytesReturned = 0;
+    if (WSAIoctl_winsock(
+            s->m_socket, SIO_KEEPALIVE_VALS, &vals, sizeof(vals), nullptr, 0, &bytesReturned, nullptr, nullptr
+        ) == SOCKET_ERROR) {
+      LOG_DEBUG("failed to configure tcp keepalive timings: %d", getsockerror_winsock());
+    }
   }
 }
 

@@ -205,6 +205,9 @@ enum class EventTypes : uint32_t
   /// This event is sent when fake input ends.
   PrimaryComputerFakeInputEnd,
 
+  /// Emitted when the Windows input watchdog recovers from a stalled core loop.
+  PrimaryComputerWatchdogRecover,
+
   /** This event is sent whenever the computer has failed for some reason (e.g. the X Windows
       server died).
   */

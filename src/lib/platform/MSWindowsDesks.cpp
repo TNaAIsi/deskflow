@@ -780,6 +780,13 @@ void MSWindowsDesks::deskThread(const void *vdesk)
           DESKFLOW_HOOK_FAKE_INPUT_VIRTUAL_KEY, DESKFLOW_HOOK_FAKE_INPUT_SCANCODE, msg.wParam ? 0 : KEYEVENTF_KEYUP
       );
       break;
+
+    case DESKFLOW_MSG_WATCHDOG_RECOVER:
+      if (!m_isOnComputer) {
+        m_isOnComputer = true;
+        deskEnter(desk);
+      }
+      continue;
     }
 
     // notify that message was processed
@@ -901,6 +908,7 @@ void MSWindowsDesks::waitForDesk() const
 
 void MSWindowsDesks::handleCheckDesk()
 {
+  MSWindowsHook::heartbeat();
   checkDesk();
 
   // also check if screen saver is running if on a modern OS and
