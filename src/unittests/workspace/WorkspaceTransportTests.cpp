@@ -568,4 +568,44 @@ void WorkspaceTransportTests::duplicateControlAbortsStalePeerPromptly()
   QVERIFY(server.channelReady(QStringLiteral("mac-peer"), Channel::Control));
 }
 
+void WorkspaceTransportTests::duplicateFilesAbortsStaleChannelPromptly()
+{
+  WorkspaceTransport server;
+  QVERIFY(server.setIdentityFiles(m_certificate, m_trusted, m_trusted));
+  QVERIFY(server.start(true, QStringLiteral("server"), 0, {}, QStringLiteral("127.0.0.1")));
+
+  QSslSocket control;
+  connectRaw(control, m_certificate, server.listeningPort());
+  QTRY_VERIFY_WITH_TIMEOUT(control.isEncrypted(), 5000);
+  const auto token =
+      rawHello(control, QStringLiteral("mac-peer"), QStringLiteral("control")).value(QStringLiteral("token")).toString();
+  QCOMPARE(token.size(), 32);
+  QVERIFY(server.channelReady(QStringLiteral("mac-peer"), Channel::Control));
+
+  QSslSocket staleFiles;
+  connectRaw(staleFiles, m_certificate, server.listeningPort());
+  QTRY_VERIFY_WITH_TIMEOUT(staleFiles.isEncrypted(), 5000);
+  QVERIFY(!rawHello(staleFiles, QStringLiteral("mac-peer"), QStringLiteral("files"), token).isEmpty());
+  QVERIFY(server.channelReady(QStringLiteral("mac-peer"), Channel::Files));
+
+  QElapsedTimer timer;
+  timer.start();
+  QSslSocket reconnectFiles;
+  connectRaw(reconnectFiles, m_certificate, server.listeningPort());
+  QTRY_VERIFY_WITH_TIMEOUT(reconnectFiles.isEncrypted(), 5000);
+  QVERIFY(rawHello(reconnectFiles, QStringLiteral("mac-peer"), QStringLiteral("files"), token).isEmpty());
+  QTRY_COMPARE_WITH_TIMEOUT(reconnectFiles.state(), QAbstractSocket::UnconnectedState, 5000);
+
+  QTRY_VERIFY_WITH_TIMEOUT(!server.channelReady(QStringLiteral("mac-peer"), Channel::Files), 3500);
+  QVERIFY(server.channelReady(QStringLiteral("mac-peer"), Channel::Control));
+  QVERIFY(timer.elapsed() < 4000);
+
+  QSslSocket freshFiles;
+  connectRaw(freshFiles, m_certificate, server.listeningPort());
+  QTRY_VERIFY_WITH_TIMEOUT(freshFiles.isEncrypted(), 5000);
+  QVERIFY(!rawHello(freshFiles, QStringLiteral("mac-peer"), QStringLiteral("files"), token).isEmpty());
+  QVERIFY(server.channelReady(QStringLiteral("mac-peer"), Channel::Files));
+  QVERIFY(server.channelReady(QStringLiteral("mac-peer"), Channel::Control));
+}
+
 QTEST_GUILESS_MAIN(WorkspaceTransportTests)

@@ -242,7 +242,7 @@ bool Client::leave()
   if (m_enableClipboard) {
     // send clipboards that we own and that have changed
     for (ClipboardID id = 0; id < kClipboardEnd; ++id) {
-      if (m_ownClipboard[id]) {
+      if (m_ownClipboard[id] && !m_sentClipboard[id]) {
         sendClipboard(id);
       }
     }
@@ -663,6 +663,10 @@ void Client::handleClipboardGrabbed(const Event &event)
   }
 
   const auto *info = static_cast<const IComputer::ClipboardInfo *>(event.getData());
+  if (m_computer->isTransferFileClipboard()) {
+    LOG_DEBUG("ignoring clipboard grab for received file transfer");
+    return;
+  }
 
   // grab ownership
   m_server->onGrabClipboard(info->m_id);
@@ -672,11 +676,8 @@ void Client::handleClipboardGrabbed(const Event &event)
   m_sentClipboard[info->m_id] = false;
   m_timeClipboard[info->m_id] = 0;
 
-  // if we're not the active computer then send the clipboard now,
-  // otherwise we'll wait until we leave.
-  if (!m_active) {
-    sendClipboard(info->m_id);
-  }
+  // Send the clipboard immediately on copy instead of waiting until leave.
+  sendClipboard(info->m_id);
 }
 
 void Client::handleHello()

@@ -401,10 +401,9 @@ void WorkspaceTransport::read(QSslSocket *socket)
     }
     const auto type = frame.metadata.value("type").toString();
     const bool appropriate =
-        (link.channel == Channel::Audio && type == "audio") ||
+        type == "ping" || type == "pong" || (link.channel == Channel::Audio && type == "audio") ||
         (link.channel == Channel::Files && type.startsWith("files.")) ||
-        (link.channel == Channel::Control &&
-         (type == "displays" || type == "layout" || type == "identify" || type == "ping" || type == "pong"));
+        (link.channel == Channel::Control && (type == "displays" || type == "layout" || type == "identify"));
     if (!appropriate) {
       socket->abort();
       return;
@@ -417,6 +416,26 @@ void WorkspaceTransport::read(QSslSocket *socket)
       continue;
     Q_EMIT messageReceived(link.peer, type, frame.metadata, frame.payload);
   }
+}
+
+void WorkspaceTransport::probeExistingSocket(QSslSocket *existing)
+{
+  if (existing == nullptr || !m_links.contains(existing))
+    return;
+  auto &existingLink = m_links[existing];
+  if (existingLink.probing)
+    return;
+  existingLink.probing = true;
+  writeFrame(existing, {{"type", "ping"}});
+  const QPointer<QSslSocket> watched(existing);
+  QTimer::singleShot(2500, this, [this, watched] {
+    if (watched && m_links.contains(watched.data()) && m_links.value(watched.data()).probing) {
+      auto *stale = watched.data();
+      stale->abort();
+      if (m_links.contains(stale))
+        disconnected(stale);
+    }
+  });
 }
 
 void WorkspaceTransport::receiveHandshake(QSslSocket *socket, const QJsonObject &message)
@@ -435,23 +454,7 @@ void WorkspaceTransport::receiveHandshake(QSslSocket *socket, const QJsonObject 
       if (m_peers.contains(name)) {
         // A duplicate identity may not replace a live session.
         // Actively probe the existing control socket in case it is half-open.
-        auto *existingControl = m_peers.value(name).control.data();
-        if (existingControl != nullptr && m_links.contains(existingControl)) {
-          auto &existingLink = m_links[existingControl];
-          if (!existingLink.probing) {
-            existingLink.probing = true;
-            writeFrame(existingControl, {{"type", "ping"}});
-            const QPointer<QSslSocket> watched(existingControl);
-            QTimer::singleShot(2500, this, [this, watched] {
-              if (watched && m_links.contains(watched.data()) && m_links.value(watched.data()).probing) {
-                auto *stale = watched.data();
-                stale->abort();
-                if (m_links.contains(stale))
-                  disconnected(stale);
-              }
-            });
-          }
-        }
+        probeExistingSocket(m_peers.value(name).control.data());
         socket->abort();
         return;
       }
@@ -463,7 +466,12 @@ void WorkspaceTransport::receiveHandshake(QSslSocket *socket, const QJsonObject 
     } else {
       const auto peer = m_peers.value(name);
       if (peer.token.isEmpty() || peer.token != message.value("token").toString() ||
-          peer.fingerprint != link.fingerprint || socketFor(peer, channel)) {
+          peer.fingerprint != link.fingerprint) {
+        socket->abort();
+        return;
+      }
+      if (auto *existingAux = socketFor(peer, channel)) {
+        probeExistingSocket(existingAux);
         socket->abort();
         return;
       }
@@ -596,11 +604,19 @@ QJsonArray WorkspaceTransport::peerState() const
 void WorkspaceTransport::heartbeat()
 {
   for (const auto &name : peers()) {
-    auto *socket = socketFor(m_peers.value(name), Channel::Control);
-    if (socket != nullptr && m_links.contains(socket) && m_links.value(socket).activity.elapsed() > 20000) {
-      socket->abort();
-    } else {
-      send(name, "ping");
+    for (const auto channel : {Channel::Control, Channel::Files, Channel::Audio}) {
+      if (!m_peers.contains(name))
+        break;
+      auto *socket = socketFor(m_peers.value(name), channel);
+      if (socket != nullptr && m_links.contains(socket)) {
+        if (m_links.value(socket).activity.elapsed() > 20000) {
+          socket->abort();
+          if (m_links.contains(socket))
+            disconnected(socket);
+        } else {
+          send(name, "ping", {}, {}, channel);
+        }
+      }
     }
   }
 }

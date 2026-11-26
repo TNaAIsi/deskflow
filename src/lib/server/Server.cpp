@@ -1235,11 +1235,16 @@ void Server::handleClipboardGrabbed(const Event &event, BaseClientProxy *grabber
     return;
   }
   const auto *info = static_cast<const IComputer::ClipboardInfo *>(event.getData());
+  if (grabber == m_primaryClient && m_primaryClient->isTransferFileClipboard()) {
+    LOG_DEBUG("ignoring primary clipboard grab for received file transfer");
+    return;
+  }
 
   // ignore grab if sequence number is old.  always allow primary
-  // computer to grab.
+  // computer to grab, and allow a not-yet-entered client's initial grab (seq 0).
   ClipboardInfo &clipboard = m_clipboards[info->m_id];
-  if (grabber != m_primaryClient && info->m_sequenceNumber < clipboard.m_clipboardSeqNum) {
+  if (grabber != m_primaryClient && info->m_sequenceNumber < clipboard.m_clipboardSeqNum &&
+      !(info->m_sequenceNumber == 0 && !grabber->hasEntered())) {
     LOG_DEBUG("ignored computer \"%s\" grab of clipboard %d", getName(grabber).c_str(), info->m_id);
     return;
   }
@@ -1250,7 +1255,7 @@ void Server::handleClipboardGrabbed(const Event &event, BaseClientProxy *grabber
       clipboard.m_clipboardOwner.c_str()
   );
   clipboard.m_clipboardOwner = getName(grabber);
-  clipboard.m_clipboardSeqNum = info->m_sequenceNumber;
+  clipboard.m_clipboardSeqNum = std::max(clipboard.m_clipboardSeqNum, info->m_sequenceNumber);
 
   // clear the clipboard data (since it's not known at this point)
   if (clipboard.m_clipboard.open(0)) {
@@ -1567,16 +1572,23 @@ void Server::onClipboardChanged(const BaseClientProxy *sender, ClipboardID id, u
   ClipboardInfo &clipboard = m_clipboards[id];
 
   // ignore update if sequence number is old
-  if (seqNum < clipboard.m_clipboardSeqNum) {
+  if (seqNum < clipboard.m_clipboardSeqNum && !(seqNum == 0 && !sender->hasEntered())) {
     LOG_INFO("ignored computer \"%s\" update of clipboard %d (mis-sequenced)", getName(sender).c_str(), id);
     return;
   }
 
   // should be the expected client
-  assert(sender == m_clients.find(clipboard.m_clipboardOwner)->second);
+  const auto ownerIt = m_clients.find(clipboard.m_clipboardOwner);
+  if (ownerIt == m_clients.end() || ownerIt->second != sender) {
+    LOG_DEBUG("ignored computer \"%s\" update of clipboard %d (not owner)", getName(sender).c_str(), id);
+    return;
+  }
 
   // get data
-  sender->getClipboard(id, &clipboard.m_clipboard);
+  if (!sender->getClipboard(id, &clipboard.m_clipboard)) {
+    LOG_WARN("failed to read clipboard %d from \"%s\"", id, getName(sender).c_str());
+    return;
+  }
 
   std::string data = clipboard.m_clipboard.marshall();
   if (data.size() > m_maximumClipboardSize * 1024) {
@@ -1600,8 +1612,15 @@ void Server::onClipboardChanged(const BaseClientProxy *sender, ClipboardID id, u
     client->setClipboardDirty(id, client != sender);
   }
 
-  // send the new clipboard to the active computer
-  m_active->setClipboard(id, &clipboard.m_clipboard);
+  // send the new clipboard to the active computer and primary computer without echoing back
+  if (m_active != sender) {
+    m_active->setClipboard(id, &clipboard.m_clipboard);
+    m_active->setClipboardDirty(id, false);
+  }
+  if (sender != m_primaryClient && m_active != m_primaryClient) {
+    m_primaryClient->setClipboard(id, &clipboard.m_clipboard);
+    m_primaryClient->setClipboardDirty(id, false);
+  }
 }
 
 void Server::onScreensaver(bool activated)
@@ -2158,8 +2177,16 @@ bool Server::removeClient(BaseClientProxy *client)
   m_events->removeHandler(ClipboardGrabbed, client->getEventTarget());
   m_events->removeHandler(ClipboardChanged, client->getEventTarget());
 
+  // clear clipboard ownership before removing from client map
+  const auto removedName = getName(client);
+  for (ClipboardID id = 0; id < kClipboardEnd; ++id) {
+    if (m_clipboards[id].m_clipboardOwner == removedName) {
+      m_clipboards[id].m_clipboardOwner.clear();
+    }
+  }
+
   // remove from list
-  m_clients.erase(getName(client));
+  m_clients.erase(removedName);
   m_clientSet.erase(i);
 
   return true;

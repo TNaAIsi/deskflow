@@ -69,6 +69,11 @@ bool PrimaryClient::isLockedToComputer() const
   return m_computer->isLockedToComputer();
 }
 
+bool PrimaryClient::isTransferFileClipboard() const
+{
+  return m_computer->isTransferFileClipboard();
+}
+
 void *PrimaryClient::getEventTarget() const
 {
   return m_computer->getEventTarget();

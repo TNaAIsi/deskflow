@@ -55,6 +55,8 @@ WorkspaceService::WorkspaceService(bool server, QObject *parent)
   m_update.setSingleShot(true);
   m_update.setInterval(150);
   m_offerRetry.setInterval(25);
+  m_startRetry.setInterval(5000);
+  connect(&m_startRetry, &QTimer::timeout, this, &WorkspaceService::applyOptions);
   connect(&m_offerRetry, &QTimer::timeout, this, [this] {
     const auto keys = m_pendingOffers.keys();
     for (const auto &key : keys) {
@@ -149,6 +151,11 @@ WorkspaceService::WorkspaceService(bool server, QObject *parent)
   connect(&m_transport, &WorkspaceTransport::messageReceived, this, &WorkspaceService::message);
   connect(&DisplayTopology::instance(), &DisplayTopology::changed, this, &WorkspaceService::update);
   connect(Settings::instance(), &Settings::settingsChanged, this, [this](const QString &key) {
+    if (key == Settings::Client::RemoteHost || key == Settings::Core::Interface) {
+      if (m_initialized)
+        applyOptions();
+      return;
+    }
     if (key != Settings::Server::ExternalConfig)
       return;
     if (m_server)
@@ -194,6 +201,7 @@ WorkspaceService::~WorkspaceService()
     setWorkspaceResponsive(false);
   m_update.stop();
   m_offerRetry.stop();
+  m_startRetry.stop();
   // Stop while all members and resource children are still alive. A transport
   // member destructor must not emit callbacks into already-destroyed state.
   m_transport.stop();
@@ -228,20 +236,35 @@ void WorkspaceService::applyOptions()
     m_audio->stopCapture();
 
   if (!m_options.value("enabled").toBool()) {
+    m_startRetry.stop();
     m_transport.stop();
     m_started = false;
-  } else if (!m_started) {
+  } else {
     const int inputPort = Settings::value(Settings::Core::Port).toInt();
     if (inputPort <= 0 || inputPort >= 65535) {
+      m_startRetry.stop();
       reportError(tr("Workspace requires an input port from 1 to 65534."));
       return;
     }
-    m_port = static_cast<quint16>(inputPort + 1);
-    m_started = m_transport.start(
-        m_server, m_name, m_port,
-        Settings::value(Settings::Client::RemoteHost).toString().split(',', Qt::SkipEmptyParts),
-        Settings::value(Settings::Core::Interface).toString()
-    );
+    const auto port = static_cast<quint16>(inputPort + 1);
+    const auto hosts = Settings::value(Settings::Client::RemoteHost).toString().split(',', Qt::SkipEmptyParts);
+    const auto bindInterface = Settings::value(Settings::Core::Interface).toString();
+    if (m_started && (hosts != m_startedHosts || bindInterface != m_startedInterface || port != m_startedPort)) {
+      m_transport.stop();
+      m_started = false;
+    }
+    if (!m_started) {
+      m_port = port;
+      m_started = m_transport.start(m_server, m_name, m_port, hosts, bindInterface);
+      if (m_started) {
+        m_startedHosts = hosts;
+        m_startedInterface = bindInterface;
+        m_startedPort = m_port;
+        m_startRetry.stop();
+      } else if (!m_startRetry.isActive()) {
+        m_startRetry.start();
+      }
+    }
   }
   update();
 }

@@ -1111,12 +1111,16 @@ public:
     workers.start([weak, cancellation, paths, offer = std::move(offer), epoch]() mutable {
       QString reason;
       const auto okay = scanOffer(paths, offer, cancellation, reason);
-      dispatch(weak, [offer = std::move(offer), reason, okay, epoch](FileTransferService *service) mutable {
+      dispatch(weak, [offer = std::move(offer), cancellation, reason, okay, epoch](FileTransferService *service) mutable {
         auto self = service->d.get();
         self->scans.remove(offer.id);
+        if (offer.clipboard && self->clipboardScan == cancellation)
+          self->clipboardScan.reset();
         if (offer.clipboard && (!self->clipboardEnabled || epoch != self->clipboardEpoch))
           return;
         if (!okay) {
+          if (offer.clipboard)
+            g_fileClipboardActive.store(false, std::memory_order_release);
           if (!reason.isEmpty())
             Q_EMIT service->error(reason);
           return;
@@ -1690,7 +1694,7 @@ void FileTransferService::publishClipboardOffer(const QString &peer)
         const auto offer = d->localOffers.constFind(d->clipboardOffer);
         if (offer != d->localOffers.cend() && (offer->peer.isEmpty() || offer->peer == peer))
           d->send(peer, "files.offer", offer->metadata);
-        else
+        else if (!d->clipboardScan || d->clipboardScan->load())
           d->queueOffer(paths, peer, true);
       }
       return;
@@ -1765,6 +1769,8 @@ void FileTransferService::peerDisconnected(const QString &peer)
     if (d->remoteOffers.value(key).peer == peer)
       d->remoteOffers.remove(key);
   }
+  if (d->controls.empty() && d->sending.isEmpty() && d->receiving.isEmpty())
+    d->timer->stop();
 }
 
 void FileTransferService::requestOffer(const QString &peer, const QString &id, const QString &destination)

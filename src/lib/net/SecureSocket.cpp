@@ -142,7 +142,7 @@ TCPSocket::JobResult SecureSocket::doRead()
     do {
       m_inputBuffer.write(buffer, bytesRead);
 
-      if (m_inputBuffer.getSize() > s_maxInputBufferSize) {
+      if (m_inputBuffer.getSize() > s_maxInputBufferSize && !hasPendingSecureData()) {
         break;
       }
 
@@ -279,6 +279,12 @@ int SecureSocket::secureWrite(const void *buffer, int size, int &wrote)
 bool SecureSocket::isSecureReady() const
 {
   return m_secureReady;
+}
+
+bool SecureSocket::hasPendingSecureData()
+{
+  std::scoped_lock ssl_lock{ssl_mutex_};
+  return m_ssl != nullptr && m_ssl->m_ssl != nullptr && SSL_pending(m_ssl->m_ssl) > 0;
 }
 
 void SecureSocket::initSsl(bool server)

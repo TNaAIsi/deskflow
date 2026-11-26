@@ -551,4 +551,12 @@ void ClientProxyTests::probeConnection_probesOnceAndRestoresFullAlarmOnReply()
   QCOMPARE(events.activeTimers, 0);
 }
 
+void ClientProxyTests::hasEntered_tracksEnterState()
+{
+  ProxyUnderTest test(0);
+  QVERIFY(!test.proxy->hasEntered());
+  test.proxy->enter(10, 20, 1, 0, false);
+  QVERIFY(test.proxy->hasEntered());
+}
+
 QTEST_MAIN(ClientProxyTests)

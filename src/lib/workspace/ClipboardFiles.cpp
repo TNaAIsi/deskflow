@@ -170,7 +170,16 @@ ClipboardFiles nativeClipboardFiles()
   ClipboardFiles result;
 #ifdef Q_OS_WIN
   result.revision = GetClipboardSequenceNumber();
-  if (!OpenClipboard(nullptr))
+  bool opened = false;
+  for (int attempt = 0; attempt < 5; ++attempt) {
+    if (OpenClipboard(nullptr)) {
+      opened = true;
+      break;
+    }
+    if (attempt < 4)
+      Sleep(5);
+  }
+  if (!opened)
     return result;
   result.available = true;
   if (const auto drop = static_cast<HDROP>(GetClipboardData(CF_HDROP))) {

@@ -79,6 +79,7 @@ private Q_SLOTS:
   void rejectsSymlinkSource();
   void rejectsChangedSource();
   void cancelsAndDisconnectsWithoutPublishing();
+  void peerDisconnectedPurgesQueuedControls();
 };
 
 void FileTransferServiceTests::emptyLegacyUpdatesPreserveFileClipboard()
@@ -336,6 +337,41 @@ void FileTransferServiceTests::cancelsAndDisconnectsWithoutPublishing()
     }
     QVERIFY(!QFileInfo::exists(target.path() + "/data.bin"));
   }
+}
+
+void FileTransferServiceTests::peerDisconnectedPurgesQueuedControls()
+{
+  FileTransferService service(nullptr, m_storage.path());
+  service.setClipboardEnabled(false);
+  bool allowSend = false;
+  QStringList sentPeers;
+  service.setSendHandler([&](const QString &peer, const QString &, const QJsonObject &, const QByteArray &) {
+    if (!allowSend)
+      return false;
+    sentPeers.append(peer);
+    return true;
+  });
+  QSignalSpy errors(&service, &FileTransferService::error);
+
+  for (int i = 0; i < 256; ++i) {
+    service.receiveMessage("stale-peer", "files.request", {{"id", QString::number(i)}}, {});
+  }
+  QCOMPARE(errors.size(), 0);
+
+  // Queue is now at the 256-message limit; another message should be rejected.
+  service.receiveMessage("other-peer", "files.request", {{"id", "overflow"}}, {});
+  QCOMPARE(errors.size(), 1);
+  errors.clear();
+
+  service.peerDisconnected("stale-peer");
+
+  // Purging stale-peer frees the queue so other-peer can enqueue cleanly.
+  service.receiveMessage("other-peer", "files.request", {{"id", "after-purge"}}, {});
+  QCOMPARE(errors.size(), 0);
+
+  allowSend = true;
+  QTRY_COMPARE_WITH_TIMEOUT(sentPeers.size(), 1, 5000);
+  QCOMPARE(sentPeers.first(), QStringLiteral("other-peer"));
 }
 
 QTEST_GUILESS_MAIN(FileTransferServiceTests)

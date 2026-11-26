@@ -54,6 +54,10 @@ public:
   {
     return false;
   }
+  virtual bool hasEntered() const
+  {
+    return true;
+  }
   virtual bool usesPhysicalKeyboard() const
   {
     return false;

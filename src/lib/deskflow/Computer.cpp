@@ -414,6 +414,14 @@ void *Computer::getEventTarget() const
   return m_computer;
 }
 
+bool Computer::isTransferFileClipboard() const
+{
+  if (!deskflow::workspace::g_fileClipboardEnabled.load(std::memory_order_acquire))
+    return false;
+  const auto files = deskflow::workspace::nativeClipboardFiles();
+  return files.available && !files.generation.isEmpty() && !files.paths.isEmpty();
+}
+
 bool Computer::getClipboard(ClipboardID id, IClipboard *clipboard) const
 {
   // Some applications expose a filename as text alongside the native file

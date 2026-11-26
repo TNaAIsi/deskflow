@@ -27,6 +27,7 @@ private Q_SLOTS:
   void expiredPinnedCertificateIsRejected();
   void duplicateControlKeepsLivePeerConnected();
   void duplicateControlAbortsStalePeerPromptly();
+  void duplicateFilesAbortsStaleChannelPromptly();
 
 private:
   QTemporaryDir m_directory;

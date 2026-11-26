@@ -835,8 +835,12 @@ void OSXComputer::leave()
   m_isOnComputer = false;
 }
 
-bool OSXComputer::setClipboard(ClipboardID, const IClipboard *src)
+bool OSXComputer::setClipboard(ClipboardID id, const IClipboard *src)
 {
+  if (id == kClipboardSelection) {
+    LOG_DEBUG("ignoring selection, macos has no selection");
+    return true;
+  }
   if (src != nullptr) {
     LOG_DEBUG("setting clipboard");
     return Clipboard::copy(&m_pasteboard, src);
@@ -850,7 +854,6 @@ void OSXComputer::checkClipboards()
   if (m_pasteboard.synchronize()) {
     LOG_DEBUG("clipboard changed");
     sendClipboardEvent(EventTypes::ClipboardGrabbed, kClipboardClipboard);
-    sendClipboardEvent(EventTypes::ClipboardGrabbed, kClipboardSelection);
   }
 }
 

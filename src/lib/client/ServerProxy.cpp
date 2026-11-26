@@ -530,6 +530,8 @@ void ServerProxy::leave()
 
 void ServerProxy::setClipboard()
 {
+  resetKeepAliveAlarm();
+
   // parse
   ClipboardID id;
   uint32_t seq;

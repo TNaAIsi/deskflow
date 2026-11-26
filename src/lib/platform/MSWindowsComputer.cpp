@@ -328,8 +328,13 @@ void MSWindowsComputer::leave()
   m_isOnComputer = false;
 }
 
-bool MSWindowsComputer::setClipboard(ClipboardID, const IClipboard *src)
+bool MSWindowsComputer::setClipboard(ClipboardID id, const IClipboard *src)
 {
+  if (id == kClipboardSelection) {
+    LOG_DEBUG("ignoring selection, windows has no selection");
+    return true;
+  }
+
   MSWindowsClipboard dst(m_window);
   if (src != nullptr) {
     // save clipboard data
@@ -362,7 +367,6 @@ void MSWindowsComputer::checkClipboards()
     LOG_DEBUG("clipboard changed: lost ownership and no notification received");
     m_ownClipboard = false;
     sendClipboardEvent(EventTypes::ClipboardGrabbed, kClipboardClipboard);
-    sendClipboardEvent(EventTypes::ClipboardGrabbed, kClipboardSelection);
   }
 }
 
@@ -431,8 +435,7 @@ void *MSWindowsComputer::getEventTarget() const
 bool MSWindowsComputer::getClipboard(ClipboardID, IClipboard *dst) const
 {
   MSWindowsClipboard src(m_window);
-  Clipboard::copy(dst, &src);
-  return true;
+  return Clipboard::copy(dst, &src);
 }
 
 void MSWindowsComputer::getShape(int32_t &x, int32_t &y, int32_t &w, int32_t &h) const
@@ -1468,10 +1471,11 @@ void MSWindowsComputer::onClipboardChange()
   if (!MSWindowsClipboard::isOwnedByDeskflow()) {
     if (m_ownClipboard) {
       LOG_DEBUG("clipboard changed: lost ownership");
-      m_ownClipboard = false;
-      sendClipboardEvent(EventTypes::ClipboardGrabbed, kClipboardClipboard);
-      sendClipboardEvent(EventTypes::ClipboardGrabbed, kClipboardSelection);
+    } else {
+      LOG_DEBUG("clipboard changed by another app");
     }
+    m_ownClipboard = false;
+    sendClipboardEvent(EventTypes::ClipboardGrabbed, kClipboardClipboard);
   } else if (!m_ownClipboard) {
     LOG_DEBUG("clipboard changed: %s owned", kAppId);
     m_ownClipboard = true;

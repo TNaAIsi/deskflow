@@ -81,6 +81,7 @@ private:
   void encrypted(QSslSocket *socket);
   void read(QSslSocket *socket);
   void receiveHandshake(QSslSocket *socket, const QJsonObject &message);
+  void probeExistingSocket(QSslSocket *existing);
   void disconnected(QSslSocket *socket);
   void retryClient();
   void heartbeat();

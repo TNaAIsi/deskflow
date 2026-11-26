@@ -240,6 +240,9 @@ public:
   //! Query the platform policy for automatic edge switching.
   bool isAutomaticSwitchBlocked() const;
 
+  //! Test if the native clipboard currently holds a received file transfer.
+  bool isTransferFileClipboard() const;
+
   //! Get jump zone size
   /*!
   Return the jump zone size, the size of the regions on the edges of

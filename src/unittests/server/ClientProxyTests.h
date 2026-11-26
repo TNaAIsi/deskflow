@@ -30,6 +30,7 @@ private Q_SLOTS:
   void nativeKeyboardUnsupportedSourceKeepsLegacyWire();
   void nativeKeyboardBroadcastCompatibilityCanRestoreNativeSession();
   void probeConnection_probesOnceAndRestoresFullAlarmOnReply();
+  void hasEntered_tracksEnterState();
 
 private:
   Log m_log;

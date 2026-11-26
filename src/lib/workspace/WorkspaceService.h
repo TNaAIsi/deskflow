@@ -43,16 +43,20 @@ private:
   FileTransferService *m_files;
   QTimer m_update;
   QTimer m_offerRetry;
+  QTimer m_startRetry;
   QJsonObject m_pendingOffers;
   QJsonObject m_options;
   QJsonObject m_offers;
   QStringList m_errors;
+  QStringList m_startedHosts;
   QString m_audioStatus;
   QString m_name;
   QString m_remoteLayoutMode;
+  QString m_startedInterface;
   bool m_server;
   bool m_started = false;
   bool m_initialized = false;
   quint16 m_port = 0;
+  quint16 m_startedPort = 0;
 };
 } // namespace deskflow::workspace

@@ -96,6 +96,9 @@ public:
   */
   bool isLockedToComputer() const;
 
+  //! Test if the primary clipboard currently holds a received file transfer.
+  bool isTransferFileClipboard() const;
+
   //@}
 
   // FIXME -- these probably belong on IComputer
