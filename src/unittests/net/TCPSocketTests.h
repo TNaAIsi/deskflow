@@ -7,6 +7,7 @@
 #pragma once
 
 #include "arch/Arch.h"
+#include "base/Log.h"
 
 #include <QObject>
 
@@ -20,5 +21,6 @@ private Q_SLOTS:
   void flush_timesOutInsteadOfHangingForever();
 
 private:
+  Log m_log;
   Arch m_arch;
 };

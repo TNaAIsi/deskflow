@@ -44,7 +44,6 @@ void ClientProxy1_3::probeConnection()
 
   const double probeAlarm =
       (m_keepAliveRate > 0.0) ? std::min(m_keepAliveRate, kProbeTimeoutSeconds) : kProbeTimeoutSeconds;
-  ClientProxy1_2::removeHeartbeatTimer();
   armOneShotHeartbeatTimer(probeAlarm);
 }
 
